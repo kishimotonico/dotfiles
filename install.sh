@@ -21,7 +21,7 @@ sudo apt install -y \
 if ! type volta > /dev/null 2>&1; then
     curl https://get.volta.sh | bash
     volta install node@18 # AWS CDK(v2)が、Node.js v20 非推奨のため v18 をインストール
-    npm install -g npm@10.4.0
+    npm install -g npm
 fi
 
 # AWS CLI
@@ -38,7 +38,7 @@ if ! type session-manager-plugin > /dev/null 2>&1; then
         && rm session-manager-plugin.deb
 fi
 
-if [ ! -e /usr/local/bin/_awsp ]; then
+if ! type _awsp ; then
     npm install -g awsp
 fi
 

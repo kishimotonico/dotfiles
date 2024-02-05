@@ -120,19 +120,19 @@ fi
 
 # 🪟 Windowsの環境変数で `WSLENV = USERPROFILE:USERNAME:` を設定しておく必要あり
 if [ -n "$USERPROFILE" ]; then
-  export WINHOME=$(wslpath $USERPROFILE)
+  export WIN_HOME=$(wslpath $USERPROFILE)
 fi
 
 if [ -f /usr/share/powerline/bindings/bash/powerline.sh ]; then
   source /usr/share/powerline/bindings/bash/powerline.sh
 fi
 
-export VOLTA_HOME="$HOME/.volta"
-export PATH="$VOLTA_HOME/bin:$PATH"
-
 # https://qiita.com/wankoromaru/items/92a85bd84bb3e3a08c71
 bind '"\e[B": history-search-forward' # 下矢印キー
 bind '"\e[A": history-search-backward' # 上矢印キー
+
+export VOLTA_HOME="$HOME/.volta"
+export PATH="$VOLTA_HOME/bin:$PATH"
 
 complete -C '/usr/local/bin/aws_completer' aws
 
