@@ -20,7 +20,7 @@ sudo apt install -y \
 # Node.js
 if ! type volta > /dev/null 2>&1; then
     curl https://get.volta.sh | bash
-    volta install node
+    volta install node@18 # AWS CDK(v2)が、Node.js v20 非推奨のため v18 をインストール
     npm install -g npm@10.4.0
 fi
 
