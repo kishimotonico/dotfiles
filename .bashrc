@@ -16,8 +16,8 @@ HISTCONTROL=ignoreboth
 shopt -s histappend
 
 # for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
-HISTSIZE=1000
-HISTFILESIZE=2000
+HISTSIZE=100000
+HISTFILESIZE=200000
 
 # check the window size after each command and, if necessary,
 # update the values of LINES and COLUMNS.
@@ -137,3 +137,5 @@ bind '"\e[A": history-search-backward' # 上矢印キー
 complete -C '/usr/local/bin/aws_completer' aws
 
 alias awsp="source $VOLTA_HOME/tools/image/packages/awsp/bin/_awsp"
+
+alias ghcs="gh copilot suggest -t shell"
