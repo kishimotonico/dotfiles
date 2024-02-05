@@ -136,4 +136,4 @@ bind '"\e[A": history-search-backward' # 上矢印キー
 
 complete -C '/usr/local/bin/aws_completer' aws
 
-alias awsp="source _awsp"
+alias awsp="source $VOLTA_HOME/tools/image/packages/awsp/bin/_awsp"
