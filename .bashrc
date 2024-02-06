@@ -127,6 +127,10 @@ if [ -f /usr/share/powerline/bindings/bash/powerline.sh ]; then
   source /usr/share/powerline/bindings/bash/powerline.sh
 fi
 
+if [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
+  source /usr/share/doc/fzf/examples/key-bindings.bash
+fi
+
 # https://qiita.com/wankoromaru/items/92a85bd84bb3e3a08c71
 bind '"\e[B": history-search-forward' # 下矢印キー
 bind '"\e[A": history-search-backward' # 上矢印キー
