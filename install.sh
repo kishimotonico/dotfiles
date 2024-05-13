@@ -6,11 +6,12 @@ sudo apt update -y
 sudo apt upgrade -y
 
 sudo apt install -y \
-    whois \
     rename \
     p7zip-full \
     zip \
     unzip \
+    whois \
+    nmap \
     build-essential \
     python3 \
     python3-pip \
