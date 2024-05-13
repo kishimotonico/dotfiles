@@ -1,7 +1,7 @@
 #!/bin/bash -eu
 echo "setup Ubuntu on WSL2..."
 
-sudo sed -i.bak -e 's!http://archive.ubuntu.com/ubuntu/!http://jp.archive.ubuntu.com/ubuntu/!g' /etc/apt/sources.list
+sudo sed -i.bak -E 's!http://(jp\.)?archive\.ubuntu\.com/ubuntu/?!http://ftp.udx.icscoe.jp/Linux/ubuntu/!g' /etc/apt/sources.list
 sudo apt update -y
 sudo apt upgrade -y
 
