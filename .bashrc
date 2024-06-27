@@ -146,3 +146,7 @@ source ~/dotfiles/set_aws_profile.sh
 alias awsq=set_aws_profile
 
 alias ghcs="gh copilot suggest -t shell"
+
+if [ -f "$HOME/.rye/env" ]; then
+  source "$HOME/.rye/env"
+fi
