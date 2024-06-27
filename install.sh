@@ -40,10 +40,6 @@ if ! type session-manager-plugin > /dev/null 2>&1; then
         && rm session-manager-plugin.deb
 fi
 
-if ! type _awsp ; then
-    npm install -g awsp
-fi
-
 # GitHub CLI
 if ! type gh > /dev/null 2>&1; then
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \

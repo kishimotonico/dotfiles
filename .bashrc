@@ -140,9 +140,8 @@ export PATH="$VOLTA_HOME/bin:$PATH"
 
 complete -C '/usr/local/bin/aws_completer' aws
 
-alias awsp="source $VOLTA_HOME/tools/image/packages/awsp/bin/_awsp"
-
 source ~/dotfiles/set_aws_profile.sh
+alias awsp=set_aws_profile
 alias awsq=set_aws_profile
 
 alias ghcs="gh copilot suggest -t shell"
