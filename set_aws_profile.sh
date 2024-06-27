@@ -25,14 +25,12 @@ function set_aws_profile() {
   unset AWS_ACCESS_KEY_ID
   unset AWS_SECRET_ACCESS_KEY
   
-  # Check sso-session 
-  local AWS_SSO_SESSION_NAME="your 'sso-session' name"  # sso-sessionの名称に変更
-
+  # Check sso-session
   check_sso_session=$(aws sts get-caller-identity 2>&1)
   if [[ "$check_sso_session" == *"Token has expired"* ]]; then
     # If the session has expired, log in again.
     echo -e "\n----------------------------\nYour Session has expired! Please login...\n----------------------------\n"
-    aws sso login --sso-session "${AWS_SSO_SESSION_NAME}"
+    aws sso login
     aws sts get-caller-identity
   else
     # Display account information upon successful login, and show an error message upon login failure.
