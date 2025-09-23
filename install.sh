@@ -34,6 +34,14 @@ if ! type aws > /dev/null 2>&1; then
         && rm -rf aws awscliv2.zip
 fi
 
+# AWS SAM
+if ! type sam > /dev/null 2>&1; then
+    curl -fLO "https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip" \
+        && unzip aws-sam-cli-linux-x86_64.zip -d sam-installation \
+        && sudo ./sam-installation/install \
+        && rm -rf sam-installation sam-installation.zip
+fi
+
 if ! type session-manager-plugin > /dev/null 2>&1; then
     curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o "session-manager-plugin.deb" \
         && sudo dpkg -i session-manager-plugin.deb \
@@ -58,3 +66,14 @@ if ! type git-secrets > /dev/null 2>&1; then
     sudo sh -c "cd /tmp && git clone https://github.com/awslabs/git-secrets.git && cd git-secrets && make install"
 fi
 
+# hadolint
+if ! type hadolint > /dev/null 2>&1; then
+    sudo curl -fL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 -o /usr/local/bin/hadolint
+    sudo chmod +x /usr/local/bin/hadolint
+fi
+
+# # wsl-open
+# if ! type wsl-open > /dev/null 2>&1; then
+#     curl -o $HOME/dotfiles/wsl-open https://raw.githubusercontent.com/4U6U57/wsl-open/6419bb63845acd0533f30bdc8258f8df5fbb25cb/wsl-open.sh
+#     chmod +x /usr/local/bin/wsl-open
+# fi
