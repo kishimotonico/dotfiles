@@ -1,0 +1,25 @@
+[default]
+region = ap-northeast-1
+cli_auto_prompt = on-partial
+
+[profile shared-credential-profile]
+# ~/.aws/credentialsにシークレットを記述する
+region = ap-northeast-1
+
+[profile legacy-sso-profile]
+sso_start_url = https://example.awsapps.com/start/#/
+sso_region = ap-northeast-1
+sso_account_id = 111111111111
+sso_role_name = AWSPowerUserAccess
+region = ap-northeast-1
+
+[profile sso-profile-1]
+sso_session = example-sso
+sso_account_id = 222222222222
+sso_role_name = AWSAdministratorAccess
+region = ap-northeast-1
+
+[sso-session example-sso]
+sso_start_url = https://example.awsapps.com/start#
+sso_region = ap-northeast-1
+sso_registration_scopes = sso:account:access

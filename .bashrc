@@ -148,6 +148,9 @@ source ~/dotfiles/set_aws_profile.sh
 alias awsp=set_aws_profile
 alias awsq=set_aws_profile
 
+source ~/dotfiles/set_aws_saml_login.sh
+alias awssaml=set_aws_saml_login
+
 export BROWSER='/mnt/c/Program Files/Google/Chrome/Application/chrome.exe'
 alias xdg-open=wsl-open
 
