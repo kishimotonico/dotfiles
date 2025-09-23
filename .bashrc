@@ -135,8 +135,12 @@ fi
 bind '"\e[B": history-search-forward' # 下矢印キー
 bind '"\e[A": history-search-backward' # 上矢印キー
 
+export XDG_CONFIG_HOME="$HOME/.config"
+
 export VOLTA_HOME="$HOME/.volta"
 export PATH="$VOLTA_HOME/bin:$PATH"
+
+export VOLTA_FEATURE_PNPM=1
 
 complete -C '/usr/local/bin/aws_completer' aws
 
@@ -144,8 +148,14 @@ source ~/dotfiles/set_aws_profile.sh
 alias awsp=set_aws_profile
 alias awsq=set_aws_profile
 
+export BROWSER='/mnt/c/Program Files/Google/Chrome/Application/chrome.exe'
+alias xdg-open=wsl-open
+
 alias ghcs="gh copilot suggest -t shell"
+alias dc="docker compose"
 
 if [ -f "$HOME/.rye/env" ]; then
   source "$HOME/.rye/env"
 fi
+
+eval "$($HOME/.local/bin/sheldon source)"
