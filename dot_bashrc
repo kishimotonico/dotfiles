@@ -59,8 +59,8 @@ fi
 
 # 環境変数
 export XDG_CONFIG_HOME="$HOME/.config"
-export BROWSER='/mnt/c/Program Files/Google/Chrome/Application/chrome.exe'
-export EDITOR='code'
+export BROWSER="/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
+export EDITOR="code --wait"
 export VOLTA_HOME="$HOME/.volta"
 export VOLTA_FEATURE_PNPM=1
 
