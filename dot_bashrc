@@ -74,11 +74,11 @@ alias dc="docker compose"
 # AWS CLI
 complete -C '/usr/local/bin/aws_completer' aws
 
-source ~/dotfiles/set_aws_profile.sh
+source $CHEZMOI_SOURCE_DIR/scripts/set_aws_profile.sh
 alias awsp=set_aws_profile
 alias awsq=set_aws_profile
 
-source ~/dotfiles/set_aws_saml_login.sh
+source $CHEZMOI_SOURCE_DIR/scripts/set_aws_saml_login.sh
 alias awssaml=set_aws_saml_login
 
 # rye (廃止予定)
@@ -87,4 +87,6 @@ if [ -f "$HOME/.rye/env" ]; then
 fi
 
 # sheldon
-eval "$($HOME/.local/bin/sheldon source)"
+if [ -f "$HOME/.local/bin/sheldon" ]; then
+  eval "$($HOME/.local/bin/sheldon source)"
+fi
