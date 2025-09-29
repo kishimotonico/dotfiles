@@ -63,6 +63,7 @@ export BROWSER="/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
 export EDITOR="code --wait"
 export VOLTA_HOME="$HOME/.volta"
 export VOLTA_FEATURE_PNPM=1
+export CHEZMOI_SCRIPT_DIR="$HOME/.local/share/chezmoi/scripts"
 
 export PATH="$VOLTA_HOME/bin:$PATH"
 
@@ -74,11 +75,11 @@ alias dc="docker compose"
 # AWS CLI
 complete -C '/usr/local/bin/aws_completer' aws
 
-source $CHEZMOI_SOURCE_DIR/scripts/set_aws_profile.sh
+source $CHEZMOI_SCRIPT_DIR/set_aws_profile.sh
 alias awsp=set_aws_profile
 alias awsq=set_aws_profile
 
-source $CHEZMOI_SOURCE_DIR/scripts/set_aws_saml_login.sh
+source $CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh
 alias awssaml=set_aws_saml_login
 
 # rye (廃止予定)
