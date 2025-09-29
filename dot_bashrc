@@ -58,6 +58,8 @@ export BROWSER="/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
 export EDITOR="code --wait"
 export CHEZMOI_SCRIPT_DIR="$HOME/.local/share/chezmoi/scripts"
 
+export PATH="$HOME/.local/bin:$PATH"
+
 # エイリアス
 alias xdg-open=wsl-open
 alias ghcs="gh copilot suggest -t shell"
@@ -72,6 +74,12 @@ alias awsq=set_aws_profile
 
 source $CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh
 alias awssaml=set_aws_saml_login
+
+# mise
+eval "$(mise activate bash)"
+
+# Starship
+eval "$(starship init bash)"
 
 # rye (廃止予定)
 if [ -f "$HOME/.rye/env" ]; then
