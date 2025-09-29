@@ -61,11 +61,7 @@ fi
 export XDG_CONFIG_HOME="$HOME/.config"
 export BROWSER="/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
 export EDITOR="code --wait"
-export VOLTA_HOME="$HOME/.volta"
-export VOLTA_FEATURE_PNPM=1
 export CHEZMOI_SCRIPT_DIR="$HOME/.local/share/chezmoi/scripts"
-
-export PATH="$VOLTA_HOME/bin:$PATH"
 
 # エイリアス
 alias xdg-open=wsl-open
