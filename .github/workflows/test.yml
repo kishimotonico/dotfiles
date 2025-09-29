@@ -15,79 +15,29 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Build and test dotfiles with Docker
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image with cache
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./tests/Dockerfile
+        tags: dotfiles-test:latest
+        load: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Run dotfiles setup
       run: |
-        docker build -f tests/Dockerfile -t dotfiles-test .
-        docker run --rm dotfiles-test
+        docker run --name dotfiles-container dotfiles-test
 
-    - name: Verify installed applications in container
+    - name: Verify installed applications
       run: |
-        docker run --rm dotfiles-test /bin/bash -c '
-          echo "🔍 Verifying installed applications and their versions..."
+        docker exec dotfiles-container /tests/verify.sh
 
-          # Source bashrc to get mise and other tools in PATH
-          source ~/.bashrc 2>/dev/null || true
-
-          # Function to check version with fallback
-          check_version() {
-            local tool=$1
-            local version_cmd=$2
-            echo -n "Checking $tool: "
-            if command -v $tool >/dev/null 2>&1; then
-              eval $version_cmd 2>/dev/null || echo "installed (version check failed)"
-            else
-              echo "❌ NOT FOUND"
-              return 1
-            fi
-          }
-
-          # Check APT installed packages
-          echo "📦 APT packages:"
-          check_version "rename" "rename --version | head -1"
-          check_version "zip" "zip --version | head -1"
-          check_version "unzip" "unzip -v | head -1"
-          check_version "whois" "whois --version"
-          check_version "nmap" "nmap --version | head -1"
-          check_version "gcc" "gcc --version | head -1"
-
-          echo ""
-          echo "🛠️  mise-managed tools:"
-
-          # Check if mise is available and properly configured
-          if command -v mise >/dev/null 2>&1; then
-            echo "mise: $(mise --version)"
-            echo "mise installed tools:"
-            mise list 2>/dev/null || echo "No tools listed (may still be installing)"
-            echo ""
-
-            # Check specific tools from config.toml
-            check_version "aws" "aws --version"
-            check_version "fzf" "fzf --version"
-            check_version "jq" "jq --version"
-            check_version "uv" "uv --version"
-            check_version "node" "node --version"
-            check_version "pnpm" "pnpm --version"
-            check_version "gh" "gh --version | head -1"
-            check_version "hadolint" "hadolint --version"
-
-            # Check npm packages
-            echo ""
-            echo "📦 NPM global packages:"
-            if command -v npm >/dev/null 2>&1; then
-              npm list -g --depth=0 2>/dev/null | grep -E "(claude-code|biome|devcontainers|aws-cdk|http-server|npm-check-updates|wscat)" || echo "Some npm packages may not be fully installed"
-            else
-              echo "npm not available yet"
-            fi
-          else
-            echo "❌ mise not found in PATH"
-          fi
-
-          echo ""
-          echo "📂 Configuration files:"
-          echo "~/.bashrc exists: $(test -f ~/.bashrc && echo "✅" || echo "❌")"
-          echo "~/.config/mise/config.toml exists: $(test -f ~/.config/mise/config.toml && echo "✅" || echo "❌")"
-
-          echo ""
-          echo "✅ Verification completed!"
-        '
+    - name: Cleanup container
+      if: always()
+      run: |
+        docker rm -f dotfiles-container || true
 

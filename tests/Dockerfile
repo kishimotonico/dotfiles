@@ -2,7 +2,7 @@ ARG UBUNTU_VERSION=24.04
 FROM ubuntu:${UBUNTU_VERSION}
 
 ENV TZ=Asia/Tokyo
-ENV USER_NAME=testuser
+ENV USER_NAME=sakurai-miyo
 
 RUN apt-get update \
     && apt-get install -y \
@@ -19,11 +19,10 @@ RUN adduser --disabled-password --gecos "" ${USER_NAME} \
     && chmod 0440 /etc/sudoers.d/${USER_NAME}-sudo
 
 COPY --chown=${USER_NAME}:${USER_NAME} .. /home/${USER_NAME}/dotfiles
-COPY tests/test-setup.sh test-setup.sh
-RUN sudo chmod +x /test-setup.sh
+COPY --chmod=755 tests/setup.sh /tests/setup.sh
+COPY --chmod=755 tests/verify.sh /tests/verify.sh
 
 USER ${USER_NAME}
 WORKDIR /home/${USER_NAME}
 
-# テスト実行用のエントリーポイント
-CMD ["/test-setup.sh"]
+CMD ["/tests/setup.sh"]
