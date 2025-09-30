@@ -54,6 +54,9 @@ fi
 
 # 環境変数
 export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_DATA_HOME="$HOME/.local/share"
+export XDG_STATE_HOME="$HOME/.local/state"
+export XDG_CACHE_HOME="$HOME/.cache"
 export BROWSER="/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
 export EDITOR="code --wait"
 export CHEZMOI_SCRIPT_DIR="$HOME/.local/share/chezmoi/scripts"
@@ -90,3 +93,16 @@ fi
 if [ -f "$HOME/.local/bin/sheldon" ]; then
   eval "$($HOME/.local/bin/sheldon source)"
 fi
+
+# xdg-ninja
+export HISTFILE="${XDG_STATE_HOME}"/bash/history
+export DOTNET_CLI_HOME="$XDG_DATA_HOME"/dotnet
+export GNUPGHOME="$XDG_DATA_HOME"/gnupg
+export LESSHISTFILE="${XDG_STATE_HOME}"/lesshst
+export MYSQL_HISTFILE="$XDG_DATA_HOME"/mysql_history
+export NODE_REPL_HISTORY="$XDG_STATE_HOME"/node_repl_history
+export NPM_CONFIG_INIT_MODULE="$XDG_CONFIG_HOME"/npm/config/npm-init.js
+export NPM_CONFIG_CACHE="$XDG_CACHE_HOME"/npm
+# export NPM_CONFIG_TMP="$XDG_RUNTIME_DIR"/npm      # `npm warn Unknown env config "tmp". This will stop working in the next major version of npm.`
+export PLATFORMIO_CORE_DIR="$XDG_DATA_HOME"/platformio
+alias wget="wget --hsts-file=$XDG_DATA_HOME/wget-hsts"
