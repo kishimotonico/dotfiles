@@ -80,6 +80,7 @@ alias awssaml=set_aws_saml_login
 
 # mise
 eval "$(mise activate bash)"
+eval "$(mise completions bash --include-bash-completion-lib)"
 
 # Starship
 eval "$(starship init bash)"
