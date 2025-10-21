@@ -85,6 +85,9 @@ eval "$(mise completions bash --include-bash-completion-lib)"
 # Starship
 eval "$(starship init bash)"
 
+# zoxide
+eval "$(zoxide init bash)"
+
 # rye (廃止予定)
 if [ -f "$HOME/.rye/env" ]; then
   source "$HOME/.rye/env"
@@ -107,3 +110,4 @@ export NPM_CONFIG_CACHE="$XDG_CACHE_HOME"/npm
 # export NPM_CONFIG_TMP="$XDG_RUNTIME_DIR"/npm      # `npm warn Unknown env config "tmp". This will stop working in the next major version of npm.`
 export PLATFORMIO_CORE_DIR="$XDG_DATA_HOME"/platformio
 alias wget="wget --hsts-file=$XDG_DATA_HOME/wget-hsts"
+
