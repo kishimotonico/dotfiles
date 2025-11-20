@@ -78,6 +78,8 @@ alias awsq=set_aws_profile
 source $CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh
 alias awssaml=set_aws_saml_login
 
+source $CHEZMOI_SCRIPT_DIR/aws_ec2_start_instance.sh
+
 # mise
 eval "$(mise activate bash)"
 eval "$(mise completions bash --include-bash-completion-lib)"
