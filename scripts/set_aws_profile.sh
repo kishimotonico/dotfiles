@@ -25,12 +25,16 @@ function set_aws_profile() {
   unset AWS_ACCESS_KEY_ID
   unset AWS_SECRET_ACCESS_KEY
   
-  # Check sso-session
   check_sso_session=$(aws sts get-caller-identity 2>&1)
   if [[ "$check_sso_session" == *"Token has expired"* ]]; then
-    # If the session has expired, log in again.
+    # SSOのセッションが有効期限切れの場合
     echo -e "\n----------------------------\nYour Session has expired! Please login...\n----------------------------\n"
     aws sso login
+    aws sts get-caller-identity
+  elif [[ "$check_sso_session" == *"(ExpiredToken) when calling the GetCallerIdentity operation"* ]]; then
+    # アクセストークンが有効期限切れの場合
+    echo -e "\n----------------------------\nYour Token has expired! Please re-login...\n----------------------------\n"
+    saml2aws.exe login --skip-prompt -a "$selected_profile"
     aws sts get-caller-identity
   else
     # Display account information upon successful login, and show an error message upon login failure.
