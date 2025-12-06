@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-from typing import List, Optional
-from pathlib import Path
-import subprocess
-import re
-
 """
 
 OpenSSH configのIPアドレスを動的に書き換えるツールです
@@ -35,7 +30,7 @@ import sys
 from InquirerPy.prompts.fuzzy import FuzzyPrompt
 
 SSH_CONFIG = Path('~/.ssh/config').expanduser()
-DIRECTIVE = r'^\s*#<\|(?P<name>.+)\|> ?(?P<cmd>.*)'
+DIRECTIVE_PATTERN = re.compile(r'^\s*#<\|(?P<name>.+)\|> ?(?P<cmd>.*)')
 HOSTNAME_PATTERN = re.compile(r'^(\s*HostName\s+)(.*)', re.IGNORECASE)
 
 @dataclass
@@ -68,7 +63,7 @@ def analyze_tasks(lines: List[str]) -> List[UpdateTask]:
     tasks = []
 
     for i, line in enumerate(lines):
-        match = re.match(DIRECTIVE, line)
+        match = DIRECTIVE_PATTERN.match(line)
         if not match:
             continue
 
@@ -92,7 +87,6 @@ def analyze_tasks(lines: List[str]) -> List[UpdateTask]:
 def select_tasks(tasks: List[UpdateTask]) -> List[UpdateTask]:
     """
     InquirerPyを使って実行するタスクを選択させます。
-    単一選択モードです。
     """
     if not tasks:
         return []
@@ -107,7 +101,7 @@ def select_tasks(tasks: List[UpdateTask]) -> List[UpdateTask]:
     # 選択肢の作成 (名前の一覧)
     choices = sorted(list(tasks_by_name.keys()))
 
-    print("\n[選択] 更新したいディレクティブを選んでください")
+    print("[選択] 更新したいディレクティブを選んでください")
 
     try:
         # multiselect=False により単一選択モードになります
@@ -134,14 +128,12 @@ def apply_updates(lines: List[str], tasks: List[UpdateTask]) -> List[str]:
     タスクリストに従ってコマンドを実行し、linesを書き換えます。
     """
     new_lines = lines.copy()
-
-    print("\n--- コマンド実行開始 ---")
-
-    # 実行順序を行番号順にソート
     sorted_tasks = sorted(tasks, key=lambda t: t.target_line_index)
 
+    print("[実行] 更新を開始します")
+
     for task in sorted_tasks:
-        print(f"[{task.name}] 更新中... ", end='', flush=True)
+        print(f"{task.name} 更新中... ", end='', flush=True)
 
         new_ip = command_execute(task.command)
 
@@ -168,11 +160,12 @@ def main():
             print("更新対象のディレクティブが見つかりませんでした。")
             return
 
-        # 2. 選択 (単一選択)
+        # 2. ディレクティブの選択
         target_tasks = select_tasks(all_tasks)
+        print("")
 
         if not target_tasks:
-            print("\nキャンセルされました。")
+            print("キャンセルされました。")
             return
 
         # 3. 実行 & 書き換え
