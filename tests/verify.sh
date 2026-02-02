@@ -2,6 +2,9 @@
 
 echo "🔍 Verifying installed applications and their versions..."
 
+# Add mise to PATH first
+export PATH="$HOME/.local/bin:$PATH"
+
 # Source bashrc to get mise and other tools in PATH
 source ~/.bashrc 2>/dev/null || true
 
