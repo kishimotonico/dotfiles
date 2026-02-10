@@ -1,0 +1,11 @@
+{{- $gitName := "kishimotonico" -}}
+{{- $gitEmail := "kishimotonico@gmail.com" -}}
+
+{{- if stdinIsATTY -}}
+{{-   $gitName = promptString "Git user.name" $gitName -}}
+{{-   $gitEmail = promptString "Git user.email" $gitEmail -}}
+{{- end -}}
+
+[data]
+    gitName = {{ $gitName | quote }}
+    gitEmail = {{ $gitEmail | quote }}
