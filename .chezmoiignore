@@ -1,3 +1,4 @@
 scripts
 tests
 README.md
+.config/git/config.local
