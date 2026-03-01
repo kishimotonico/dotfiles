@@ -2,15 +2,7 @@
 # managed by chezmoi
 # This file is not read by bash(1), if ~/.bash_profile or ~/.bash_login exists.
 
-# if running bash
-if [ -n "$BASH_VERSION" ]; then
-    # include .bashrc if it exists
-    if [ -f "$HOME/.bashrc" ]; then
-        . "$HOME/.bashrc"
-    fi
-fi
-
-# PATH
+# PATH (.bashrc を source する前に設定して mise 等を見つけられるようにする)
 if [ -d "$HOME/bin" ]; then
     PATH="$HOME/bin:$PATH"
 fi
@@ -48,3 +40,11 @@ fi
 export BROWSER="/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
 export EDITOR="code --wait"
 {{- end }}
+
+# if running bash
+if [ -n "$BASH_VERSION" ]; then
+    # include .bashrc if it exists (PATH・環境変数設定後に source する)
+    if [ -f "$HOME/.bashrc" ]; then
+        . "$HOME/.bashrc"
+    fi
+fi

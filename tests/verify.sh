@@ -9,13 +9,26 @@ eval "$($HOME/.local/bin/mise activate bash)"
 # Initialize failure flag
 failed=0
 
-# Function to check version with fallback
+# バージョンを確認するヘルパー関数（見つからない場合はエラー）
 check_version() {
   local tool=$1
   local version_cmd=$2
   echo -n "Checking $tool: "
   if command -v $tool >/dev/null 2>&1; then
     eval $version_cmd 2>/dev/null || echo "installed (version check failed)"
+  else
+    echo "❌ NOT FOUND"
+    failed=1
+  fi
+}
+
+# ログインシェル（bash --login -i）でツールが見つかるか確認するヘルパー関数
+# .profile → .bashrc の初期化が正しく動作することを end-to-end で検証する
+check_login_shell() {
+  local tool=$1
+  echo -n "  $tool: "
+  if bash --login -i -c "command -v $tool" >/dev/null 2>&1; then
+    echo "✅"
   else
     echo "❌ NOT FOUND"
     failed=1
@@ -57,6 +70,14 @@ echo ""
 echo "📂 Configuration files:"
 echo "~/.bashrc exists: $(test -f ~/.bashrc && echo "✅" || echo "❌")"
 echo "~/.config/mise/config.toml exists: $(test -f ~/.config/mise/config.toml && echo "✅" || echo "❌")"
+
+# .profile → .bashrc の初期化が end-to-end で動作するか検証する
+# これらのツールは .bashrc で activate されるため、.profile で先に PATH が設定されている必要がある
+echo ""
+echo "🔐 Login shell (bash --login -i):"
+check_login_shell "mise"
+check_login_shell "starship"
+check_login_shell "zoxide"
 
 echo ""
 
