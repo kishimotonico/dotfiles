@@ -1,13 +1,5 @@
-{{- $gitName := "kishimotonico" -}}
-{{- $gitEmail := "kishimotonico@gmail.com" -}}
-
-{{- if stdinIsATTY -}}
-{{-   $gitName = promptStringOnce . "gitName" "Git user.name" $gitName -}}
-{{-   $gitEmail = promptStringOnce . "gitEmail" "Git user.email" $gitEmail -}}
-{{- else if hasKey . "gitName" -}}
-{{-   $gitName = .gitName -}}
-{{-   $gitEmail = .gitEmail -}}
-{{- end -}}
+{{- $gitName := promptStringOnce . "gitName" "Git user.name" "kishimotonico" -}}
+{{- $gitEmail := promptStringOnce . "gitEmail" "Git user.email" "kishimotonico@gmail.com" -}}
 
 {{- $osid := .chezmoi.os -}}
 {{- if hasKey .chezmoi.osRelease "id" -}}
