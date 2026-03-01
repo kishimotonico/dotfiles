@@ -1,9 +1,8 @@
 #!/bin/bash
 
-echo "setup Ubuntu on WSL2..."
-
+{{ if eq .chezmoi.osRelease.id "ubuntu" -}}
+echo "Setting up apt mirror for Ubuntu..."
 . /etc/lsb-release
-
 if [ "${DISTRIB_RELEASE%%.*}" -ge 24 ]; then
     # Ubuntu 24.04 LTS 以降
     APT_SOURCE_FILE=/etc/apt/sources.list.d/ubuntu.sources
@@ -11,8 +10,10 @@ else
     # それより以前
     APT_SOURCE_FILE=/etc/apt/sources.list
 fi
-sudo sed -i.bak -r 's@http://(jp\.)?archive\.ubuntu\.com/ubuntu/?@https://ftp.udx.icscoe.jp/Linux/ubuntu/@g' $APT_SOURCE_FILE
+sudo sed -i.bak -r 's@http://(jp\.)?archive\.ubuntu\.com/ubuntu/?@https://ftp.udx.icscoe.jp/Linux/ubuntu/@g' "$APT_SOURCE_FILE"
+{{ end -}}
 
+echo "Installing packages..."
 sudo apt update -y
 sudo apt upgrade -y
 

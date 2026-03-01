@@ -6,6 +6,15 @@
 {{-   $gitEmail = promptString "Git user.email" $gitEmail -}}
 {{- end -}}
 
+{{- $osid := .chezmoi.os -}}
+{{- if hasKey .chezmoi.osRelease "id" -}}
+{{-   $osid = printf "%s-%s" .chezmoi.os .chezmoi.osRelease.id -}}
+{{- end -}}
+
+{{- $isWsl := and (eq .chezmoi.os "linux") (contains "microsoft" (.chezmoi.kernel.osrelease | lower)) -}}
+
 [data]
     gitName = {{ $gitName | quote }}
     gitEmail = {{ $gitEmail | quote }}
+    osid = {{ $osid | quote }}
+    isWsl = {{ $isWsl }}

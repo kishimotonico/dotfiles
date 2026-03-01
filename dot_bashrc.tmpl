@@ -34,8 +34,7 @@ elif [ -f /etc/bash_completion ]; then
   . /etc/bash_completion
 fi
 
-
-
+{{ if .isWsl -}}
 # WSL (Windowsの環境変数で `WSLENV = USERPROFILE:USERNAME:` を設定しておく)
 if [ -n "$USERPROFILE" ]; then
   export WIN_HOME=$(wslpath $USERPROFILE)
@@ -43,6 +42,7 @@ fi
 
 alias explorer="explorer.exe"
 alias clip="clip.exe"
+{{ end -}}
 
 # 履歴検索
 # https://qiita.com/wankoromaru/items/92a85bd84bb3e3a08c71
@@ -57,26 +57,40 @@ export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_DATA_HOME="$HOME/.local/share"
 export XDG_STATE_HOME="$HOME/.local/state"
 export XDG_CACHE_HOME="$HOME/.cache"
+{{ if .isWsl -}}
 export BROWSER="/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
 export EDITOR="code --wait"
+{{ else -}}
+export EDITOR="${EDITOR:-nano}"
+{{ end -}}
 export CHEZMOI_SCRIPT_DIR="$HOME/.local/share/chezmoi/scripts"
 
 export PATH="$HOME/.local/bin:$PATH"
 
 # エイリアス
+{{ if .isWsl -}}
 alias xdg-open=wsl-open
+{{ end -}}
 alias ghcs="gh copilot suggest -t shell"
 alias dc="docker compose"
 
 # AWS CLI
-complete -C '/usr/local/bin/aws_completer' aws
+if command -v aws_completer > /dev/null 2>&1; then
+    complete -C "$(command -v aws_completer)" aws
+fi
 
-source $CHEZMOI_SCRIPT_DIR/set_aws_profile.sh
-alias awsp=set_aws_profile
-alias awsq=set_aws_profile
+if [ -f "$CHEZMOI_SCRIPT_DIR/set_aws_profile.sh" ]; then
+    source "$CHEZMOI_SCRIPT_DIR/set_aws_profile.sh"
+    alias awsp=set_aws_profile
+    alias awsq=set_aws_profile
+fi
 
-source $CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh
-alias awssaml=set_aws_saml_login
+{{ if .isWsl -}}
+if [ -f "$CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh" ]; then
+    source "$CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh"
+    alias awssaml=set_aws_saml_login
+fi
+{{ end -}}
 
 # mise
 eval "$(mise activate bash)"

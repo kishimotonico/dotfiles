@@ -1,5 +1,7 @@
 [core]
+{{- if .isWsl }}
 	editor = code --wait
+{{- end }}
 [alias]
 	lg = log --graph --pretty=format:'%Cred%h%Creset %s -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
 [user]
