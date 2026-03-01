@@ -9,9 +9,9 @@ mkdir -p ~/.local/share/gnupg
 chmod 700 ~/.local/share/gnupg
 
 # 実際の使用方法と同じようにchezmoiでセットアップ
+# --override-data でテンプレートデータを事前設定し、promptStringOnce のプロンプトをスキップ
 sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply \
-  --promptString "gitName=sakurai-miyo" \
-  --promptString "gitEmail=sakurai-miyo@example.com" \
+  --override-data '{"gitName":"sakurai-miyo","gitEmail":"sakurai-miyo@example.com"}' \
   ~/dotfiles
 
 echo "✅ Setup completed successfully!"
