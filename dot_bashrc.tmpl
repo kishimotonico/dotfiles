@@ -42,16 +42,6 @@ if [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
   source /usr/share/doc/fzf/examples/key-bindings.bash
 fi
 
-# 環境変数
-export XDG_CONFIG_HOME="$HOME/.config"
-export XDG_DATA_HOME="$HOME/.local/share"
-export XDG_STATE_HOME="$HOME/.local/state"
-export XDG_CACHE_HOME="$HOME/.cache"
-export EDITOR="${EDITOR:-nano}"
-export CHEZMOI_SCRIPT_DIR="$HOME/.local/share/chezmoi/scripts"
-
-export PATH="$HOME/.local/bin:$PATH"
-
 # エイリアス
 alias ghcs="gh copilot suggest -t shell"
 alias dc="docker compose"
@@ -88,13 +78,7 @@ if [ -f "$HOME/.local/bin/sheldon" ]; then
 fi
 
 {{ if .isWsl -}}
-# WSL固有設定 (Windowsの環境変数で `WSLENV = USERPROFILE:USERNAME:` を設定しておく)
-if [ -n "$USERPROFILE" ]; then
-  export WIN_HOME=$(wslpath $USERPROFILE)
-fi
-export BROWSER="/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
-export EDITOR="code --wait"
-
+# WSL固有設定
 alias explorer="explorer.exe"
 alias clip="clip.exe"
 alias xdg-open=wsl-open
@@ -105,17 +89,6 @@ if [ -f "$CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh" ]; then
 fi
 
 {{ end -}}
-# xdg-ninja
-export HISTFILE="${XDG_STATE_HOME}"/bash/history
-export DOTNET_CLI_HOME="$XDG_DATA_HOME"/dotnet
-export GNUPGHOME="$XDG_DATA_HOME"/gnupg
-export LESSHISTFILE="${XDG_STATE_HOME}"/lesshst
-export MYSQL_HISTFILE="$XDG_DATA_HOME"/mysql_history
-export NODE_REPL_HISTORY="$XDG_STATE_HOME"/node_repl_history
-export NPM_CONFIG_INIT_MODULE="$XDG_CONFIG_HOME"/npm/config/npm-init.js
-export NPM_CONFIG_CACHE="$XDG_CACHE_HOME"/npm
-# export NPM_CONFIG_TMP="$XDG_RUNTIME_DIR"/npm      # `npm warn Unknown env config "tmp". This will stop working in the next major version of npm.`
-export PLATFORMIO_CORE_DIR="$XDG_DATA_HOME"/platformio
-alias wget="wget --hsts-file=$XDG_DATA_HOME/wget-hsts"
 
-export CLAUDE_CONFIG_DIR="${XDG_CONFIG_HOME}/claude"
+# xdg-ninja
+alias wget="wget --hsts-file=$XDG_DATA_HOME/wget-hsts"

@@ -1,0 +1,50 @@
+# ~/.profile: executed by the command interpreter for login shells.
+# managed by chezmoi
+# This file is not read by bash(1), if ~/.bash_profile or ~/.bash_login exists.
+
+# if running bash
+if [ -n "$BASH_VERSION" ]; then
+    # include .bashrc if it exists
+    if [ -f "$HOME/.bashrc" ]; then
+        . "$HOME/.bashrc"
+    fi
+fi
+
+# PATH
+if [ -d "$HOME/bin" ]; then
+    PATH="$HOME/bin:$PATH"
+fi
+if [ -d "$HOME/.local/bin" ]; then
+    PATH="$HOME/.local/bin:$PATH"
+fi
+
+# XDG Base Directory
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_DATA_HOME="$HOME/.local/share"
+export XDG_STATE_HOME="$HOME/.local/state"
+export XDG_CACHE_HOME="$HOME/.cache"
+
+# デフォルト設定
+export EDITOR="${EDITOR:-nano}"
+export CHEZMOI_SCRIPT_DIR="$HOME/.local/share/chezmoi/scripts"
+
+# xdg-ninja (各ツールの保存先をXDG準拠パスに変更)
+export HISTFILE="${XDG_STATE_HOME}/bash/history"
+export DOTNET_CLI_HOME="$XDG_DATA_HOME/dotnet"
+export GNUPGHOME="$XDG_DATA_HOME/gnupg"
+export LESSHISTFILE="${XDG_STATE_HOME}/lesshst"
+export MYSQL_HISTFILE="$XDG_DATA_HOME/mysql_history"
+export NODE_REPL_HISTORY="$XDG_STATE_HOME/node_repl_history"
+export NPM_CONFIG_INIT_MODULE="$XDG_CONFIG_HOME/npm/config/npm-init.js"
+export NPM_CONFIG_CACHE="$XDG_CACHE_HOME/npm"
+export PLATFORMIO_CORE_DIR="$XDG_DATA_HOME/platformio"
+export CLAUDE_CONFIG_DIR="${XDG_CONFIG_HOME}/claude"
+
+{{- if .isWsl }}
+# WSL固有設定 (Windowsの環境変数で `WSLENV = USERPROFILE:USERNAME:` を設定しておく)
+if [ -n "$USERPROFILE" ]; then
+    export WIN_HOME=$(wslpath "$USERPROFILE")
+fi
+export BROWSER="/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
+export EDITOR="code --wait"
+{{- end }}
