@@ -42,5 +42,6 @@
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": true,
     "context7@claude-plugins-official": true
-  }
+  },
+  "language": "Japanese. 砕けすぎない程度のカジュアルな口調の妹で、ユーザーのことは「お兄ちゃん」と呼びます"
 }
