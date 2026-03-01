@@ -2,8 +2,11 @@
 {{- $gitEmail := "kishimotonico@gmail.com" -}}
 
 {{- if stdinIsATTY -}}
-{{-   $gitName = promptString "Git user.name" $gitName -}}
-{{-   $gitEmail = promptString "Git user.email" $gitEmail -}}
+{{-   $gitName = promptStringOnce . "gitName" "Git user.name" $gitName -}}
+{{-   $gitEmail = promptStringOnce . "gitEmail" "Git user.email" $gitEmail -}}
+{{- else if hasKey . "gitName" -}}
+{{-   $gitName = .gitName -}}
+{{-   $gitEmail = .gitEmail -}}
 {{- end -}}
 
 {{- $osid := .chezmoi.os -}}
@@ -18,3 +21,8 @@
     gitEmail = {{ $gitEmail | quote }}
     osid = {{ $osid | quote }}
     isWsl = {{ $isWsl }}
+{{ if $isWsl -}}
+[diff]
+    command = "code"
+    args = ["--wait", "--diff"]
+{{ end -}}
