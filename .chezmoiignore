@@ -1,4 +1,6 @@
 scripts
 tests
 README.md
+AGENTS.md
+CLAUDE.md
 .config/git/config.local
