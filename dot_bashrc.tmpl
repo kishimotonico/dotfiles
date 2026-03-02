@@ -77,6 +77,15 @@ if [ -f "$HOME/.local/bin/sheldon" ]; then
   eval "$($HOME/.local/bin/sheldon source)"
 fi
 
+# yazi
+function y() {
+	local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
+	command yazi "$@" --cwd-file="$tmp"
+	IFS= read -r -d '' cwd < "$tmp"
+	[ "$cwd" != "$PWD" ] && [ -d "$cwd" ] && builtin cd -- "$cwd"
+	rm -f -- "$tmp"
+}
+
 {{ if .isWsl -}}
 # WSL固有設定
 alias explorer="explorer.exe"
@@ -87,7 +96,6 @@ if [ -f "$CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh" ]; then
     source "$CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh"
     alias awssaml=set_aws_saml_login
 fi
-
 {{ end -}}
 
 # xdg-ninja
