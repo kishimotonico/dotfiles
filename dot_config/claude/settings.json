@@ -9,11 +9,13 @@
       "mcp__aivisspeech__notify_completion",
       "mcp__aivisspeech__check_engine_status",
       "Bash(ls:*)",
-      "Bash(find:*)",
+      "Bash(grep:*)",
       "Bash(gh pr diff:*)",
       "Bash(gh run list:*)",
       "Bash(gh run view:*)",
       "Bash(gh run watch:*)",
+      "Bash(git commit:*)",
+      "Bash(git diff:*)",
       "Bash(git log:*)",
       "Bash(git show:*)",
       "Bash(npm run build:*)",
@@ -31,6 +33,11 @@
       "mcp__chrome-devtools__take_snapshot",
       "mcp__plugin_context7_context7__resolve-library-id",
       "mcp__plugin_context7_context7__query-docs"
+    ],
+    "ask": [
+      "Bash(curl *)",
+      "Read(./.env)",
+      "Read(./.env.*)"
     ],
     "deny": [
       "Bash(rm:*)"
