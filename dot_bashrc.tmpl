@@ -89,7 +89,8 @@ function y() {
 {{ if .isWsl -}}
 # WSL固有設定
 alias explorer="explorer.exe"
-alias clip="clip.exe"
+alias clip="iconv -t utf16 | clip.exe"
+alias pbcopy="iconv -t utf16 | clip.exe"
 alias xdg-open=wsl-open
 
 if [ -f "$CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh" ]; then
