@@ -1,0 +1,13 @@
+#!/bin/bash
+
+{{ if eq .chezmoi.osRelease.id "ubuntu" -}}
+echo "Installing packages(WSL) ..."
+sudo apt update -y
+sudo apt upgrade -y
+
+# apt install
+sudo apt install -y \
+    libasound2-plugins \
+    alsa-utils \
+    pulseaudio-utils
+{{ end -}}
