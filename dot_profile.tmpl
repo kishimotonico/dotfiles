@@ -33,9 +33,9 @@ export PLATFORMIO_CORE_DIR="$XDG_DATA_HOME/platformio"
 export CLAUDE_CONFIG_DIR="${XDG_CONFIG_HOME}/claude"
 
 {{- if .isWsl }}
-# WSL固有設定 (Windowsの環境変数で `WSLENV = USERPROFILE:USERNAME:` を設定しておく)
+# WSL固有設定 (Windowsの環境変数で `WSLENV = USERPROFILE/up:USERNAME/u` を設定しておく)
 if [ -n "$USERPROFILE" ]; then
-    export WIN_HOME=$(wslpath "$USERPROFILE")
+    export WIN_HOME="$USERPROFILE"
 fi
 export BROWSER="/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
 export EDITOR="code --wait"
