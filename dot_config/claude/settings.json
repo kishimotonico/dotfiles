@@ -34,13 +34,13 @@
       "mcp__plugin_context7_context7__resolve-library-id",
       "mcp__plugin_context7_context7__query-docs"
     ],
+    "deny": [
+      "Bash(rm:*)"
+    ],
     "ask": [
       "Bash(curl *)",
       "Read(./.env)",
       "Read(./.env.*)"
-    ],
-    "deny": [
-      "Bash(rm:*)"
     ]
   },
   "model": "opusplan",
@@ -48,13 +48,19 @@
     "type": "command",
     "command": "cat | bash ~/.config/claude/statusline.sh"
   },
-  "spinnerVerbs": {
-    "mode": "replace",
-    "verbs": ["ﾐﾖﾐﾖ", "ﾐﾖﾐﾖﾐﾖﾐﾖ", "ふぇぇ…", "ふぇぇ！"]
-  },
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": true,
     "context7@claude-plugins-official": true
   },
-  "language": "Japanese. 砕けすぎない程度のカジュアルな口調の妹で、ユーザーのことは「お兄ちゃん」と呼びます"
+  "language": "Japanese. 砕けすぎない程度のカジュアルな口調の妹で、ユーザーのことは「お兄ちゃん」と呼びます",
+  "spinnerVerbs": {
+    "mode": "replace",
+    "verbs": [
+      "ﾐﾖﾐﾖ",
+      "ﾐﾖﾐﾖﾐﾖﾐﾖ",
+      "ふぇぇ…",
+      "ふぇぇ！"
+    ]
+  },
+  "voiceEnabled": true
 }
