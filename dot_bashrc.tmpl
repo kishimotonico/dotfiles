@@ -10,6 +10,7 @@ esac
 HISTCONTROL=ignoreboth
 HISTSIZE=100000
 HISTFILESIZE=200000
+HISTIGNORE="cd:ll:ls -la:exit:clear:history:zi:y:code .:claude:zellij:nr"
 
 shopt -s histappend
 shopt -s checkwinsize
@@ -98,6 +99,10 @@ if [ -f "$CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh" ]; then
     alias awssaml=set_aws_saml_login
 fi
 {{ end -}}
+
+# XDG準拠: Cargo
+export CARGO_HOME="$HOME/.local/share/cargo"
+export PATH="$CARGO_HOME/bin:$PATH"
 
 # xdg-ninja
 alias wget="wget --hsts-file=$XDG_DATA_HOME/wget-hsts"
