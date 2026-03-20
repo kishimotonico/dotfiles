@@ -7,7 +7,7 @@ WIP: まだ中途半端だけど、とりあえず
 ### セットアップ
 
 ```
-sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply kishimotonico
+sh -c "$(curl -fsLS get.chezmoi.io/lb)" -- init --apply kishimotonico
 ```
 
 ### 日常での操作
