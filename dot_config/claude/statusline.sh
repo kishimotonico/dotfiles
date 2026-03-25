@@ -63,11 +63,13 @@ input=$(cat)
 model=$(echo "$input" | jq -r '.model // empty')
 ver=$(echo "$model" | grep -oP '\d+[-.]\d+' | head -1 | tr '-' '.')
 case "$model" in
-  *opus*)   model_label="🤖 Opus${ver:+ $ver}" ;;
-  *sonnet*) model_label="🤖 Sonnet${ver:+ $ver}" ;;
-  *haiku*)  model_label="🤖 Haiku${ver:+ $ver}" ;;
-  *)        model_label="🤖 ${model:-?}" ;;
+  *opus*)   model_name="Opus${ver:+ $ver}" ;;
+  *sonnet*) model_name="Sonnet${ver:+ $ver}" ;;
+  *haiku*)  model_name="Haiku${ver:+ $ver}" ;;
+  *)        model_name="${model:-?}" ;;
 esac
+# モデル名を11文字にパディングして縦棒位置を固定
+model_label="🤖 $(printf '%-10s' "$model_name")"
 
 # ── Context Window ──
 ctx_bar=""
@@ -88,7 +90,7 @@ if [ -n "$usage" ] && [ "$usage" != "null" ]; then
   used_k=$(fmt_k $total_tokens)
   size_k=$(fmt_k $size)
 
-  ctx_bar="${color}${used_k}/${size_k} ${bar} ${pct}%${RESET}"
+  ctx_bar="${color}📊 $(printf '%4s' "$used_k")/${size_k} ${bar} ${pct}%${RESET}"
 fi
 
 # ── CWD ──
@@ -139,10 +141,11 @@ format_reset_time() {
 
 # ── Rate Limits (from input JSON) ──
 line2=""
-line3=""
 
 five_util=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty' 2>/dev/null)
 five_reset=$(echo "$input" | jq -r '.rate_limits.five_hour.resets_at // empty' 2>/dev/null)
+seven_util=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // empty' 2>/dev/null)
+seven_reset=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empty' 2>/dev/null)
 
 if [ -n "$five_util" ]; then
   five_int=${five_util%.*}
@@ -150,12 +153,9 @@ if [ -n "$five_util" ]; then
   five_color=$(color_for_pct "$five_int")
   five_bar=$(braille_bar "$five_int")
   five_reset_str=$(format_reset_time "$five_reset" "5h")
-  line2="${five_color}⏱  5h ${five_bar} ${five_int}%${RESET}"
+  line2="${five_color}⏱  5h ${five_bar} $(printf "%3d" $five_int)%${RESET}"
   [ -n "$five_reset_str" ] && line2+="  ${GRAY}${five_reset_str}${RESET}"
 fi
-
-seven_util=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // empty' 2>/dev/null)
-seven_reset=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empty' 2>/dev/null)
 
 if [ -n "$seven_util" ]; then
   seven_int=${seven_util%.*}
@@ -163,8 +163,13 @@ if [ -n "$seven_util" ]; then
   seven_color=$(color_for_pct "$seven_int")
   seven_bar=$(braille_bar "$seven_int")
   seven_reset_str=$(format_reset_time "$seven_reset" "7d")
-  line3="${seven_color}📅 7d ${seven_bar} ${seven_int}%${RESET}"
-  [ -n "$seven_reset_str" ] && line3+="  ${GRAY}${seven_reset_str}${RESET}"
+  seven_part="${seven_color}📅 7d ${seven_bar} $(printf "%3d" $seven_int)%${RESET}"
+  [ -n "$seven_reset_str" ] && seven_part+="  ${GRAY}${seven_reset_str}${RESET}"
+  if [ -n "$line2" ]; then
+    line2+="  │ ${seven_part}"
+  else
+    line2="$seven_part"
+  fi
 fi
 
 # ── Output ──
@@ -175,5 +180,4 @@ line1+=" │ 📁 ${dir}"
 
 printf "%b" "$line1"
 [ -n "$line2" ] && printf "\n%b" "$line2"
-[ -n "$line3" ] && printf "\n%b" "$line3"
 exit 0
