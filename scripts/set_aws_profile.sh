@@ -28,12 +28,17 @@ function set_aws_profile() {
   check_sso_session=$(aws sts get-caller-identity 2>&1)
   if [[ "$check_sso_session" == *"Token has expired"* ]]; then
     # SSOのセッションが有効期限切れの場合
-    echo -e "\n----------------------------\nYour Session has expired! Please login...\n----------------------------\n"
+    echo -e "\n--------------------------------\nセッションの有効期限切れっぽい！ \`aws sso login\`するよ\n--------------------------------\n"
     aws sso login
+    aws sts get-caller-identity
+  elif [[ "$check_sso_session" == *"Your session has expired"* ]]; then
+    # SSOのセッションが有効期限切れの場合
+    echo -e "\n--------------------------------\nセッションの有効期限切れっぽい！ \`aws login\`するよ\n--------------------------------\n"
+    aws login
     aws sts get-caller-identity
   elif [[ "$check_sso_session" == *"(ExpiredToken) when calling the GetCallerIdentity operation"* ]]; then
     # アクセストークンが有効期限切れの場合
-    echo -e "\n----------------------------\nYour Token has expired! Please re-login...\n----------------------------\n"
+    echo -e "\n--------------------------------\nセッションの有効期限切れっぽい！ \`saml2aws login\`するよ\n--------------------------------\n"
     saml2aws.exe login --skip-prompt -a "$selected_profile"
     aws sts get-caller-identity
   else
