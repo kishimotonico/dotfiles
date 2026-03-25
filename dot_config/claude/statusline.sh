@@ -121,19 +121,15 @@ format_reset_time() {
 
   local reset_str
   if [ "$label" = "5h" ]; then
-    reset_str=$(TZ="Asia/Tokyo" date -d "@${epoch}" +"%-H:%M" 2>/dev/null)
+    reset_str=$(TZ="Asia/Tokyo" date -d "@${epoch}" +"%k:%M" 2>/dev/null)
     if [ -n "$reset_str" ]; then
-      local remaining=""
+      local hours=0 mins=0
       if (( diff > 0 )); then
-        local hours=$(( diff / 3600 ))
-        local mins=$(( (diff % 3600) / 60 ))
-        if (( hours > 0 )); then
-          remaining="~${hours}h${mins}m"
-        else
-          remaining="~${mins}m"
-        fi
+        hours=$(( diff / 3600 ))
+        mins=$(( (diff % 3600) / 60 ))
       fi
-      echo -n "Reset ${reset_str}${remaining:+ ($remaining)}"
+      remaining=$(printf "~%dh%02dm" "$hours" "$mins")
+      echo -n "Reset ${reset_str} (${remaining})"
     fi
   else
     reset_str=$(TZ="Asia/Tokyo" date -d "@${epoch}" +"%-m/%-d %-H:%M" 2>/dev/null)
