@@ -5,8 +5,10 @@
 
 ## Git Rule
 
-- Gitを使う際、特に理由がなければ `-C` オプションは指定しないこと
+- Gitを使う際、`-C` オプションは利用禁止
 
-## Clipboard
+## Tools
 
-- クリップボードにコピーする場合は、`echo "hello" | clip` のように `clip` コマンドを使用すること (Don't use `clip.exe` directly)
+- Clipboard: クリップボードにコピーする場合、`clip` コマンド(e.g: `echo "hello" | clip`) を使用すること。`clip.exe`の直接利用は禁止
+- jq: JSONの解析は、Pythonよりも`jq`コマンドを推奨
+- rg: grepやfindの代わりに`rg`を推奨
