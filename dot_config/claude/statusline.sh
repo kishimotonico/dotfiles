@@ -103,11 +103,15 @@ fi
 # 5h: remaining time only (no reset clock)
 # 7d: reset time HH:mm only (no remaining time)
 format_reset_time() {
-  local iso_time=$1 label=$2
-  [ -z "$iso_time" ] && return
-  local epoch
-  epoch=$(date -d "$iso_time" +%s 2>/dev/null) || return
-  local now diff
+  local reset_val=$1 label=$2
+  [ -z "$reset_val" ] && return
+  local epoch now diff
+  # resets_at はUnixタイムスタンプ（整数）またはISO 8601文字列
+  if [[ "$reset_val" =~ ^[0-9]+$ ]]; then
+    epoch=$reset_val
+  else
+    epoch=$(date -d "$reset_val" +%s 2>/dev/null) || return
+  fi
   now=$(date +%s)
   diff=$(( epoch - now ))
 
