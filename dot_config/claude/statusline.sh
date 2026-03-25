@@ -72,6 +72,8 @@ esac
 model_label="🤖 $(printf '%-10s' "$model_name")"
 
 # ── Context Window ──
+size=$(echo "$input" | jq '.context_window.context_window_size // 200000')
+size_k=$(fmt_k $size)
 ctx_bar=""
 usage=$(echo "$input" | jq '.context_window.current_usage // empty')
 if [ -n "$usage" ] && [ "$usage" != "null" ]; then
@@ -81,16 +83,16 @@ if [ -n "$usage" ] && [ "$usage" != "null" ]; then
   output_tokens=$(echo "$usage" | jq '.output_tokens // 0')
   current=$((input_tokens + cache_create + cache_read))
   total_tokens=$((current + output_tokens))
-  size=$(echo "$input" | jq '.context_window.context_window_size // 200000')
   pct=$((total_tokens * 100 / size))
   (( pct > 100 )) && pct=100
 
   bar=$(braille_bar "$pct")
   color=$(color_for_pct "$pct")
   used_k=$(fmt_k $total_tokens)
-  size_k=$(fmt_k $size)
 
-  ctx_bar="${color}📊 $(printf '%4s' "$used_k")/${size_k} ${bar} ${pct}%${RESET}"
+  ctx_bar="${color}📊 $(printf '%4s' "$used_k")/${size_k} ${bar} $(printf '%3d' $pct)%${RESET}"
+else
+  ctx_bar="${GRAY}📊 $(printf '%4s' "--")/${size_k} $(braille_bar 0) $(printf '%3s' "--")%${RESET}"
 fi
 
 # ── CWD ──
