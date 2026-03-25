@@ -41,6 +41,8 @@ if [ -n "$USERPROFILE" ]; then
 fi
 export BROWSER="/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
 export EDITOR="code --wait"
+alias clip="iconv -t utf16 | clip.exe"
+alias pbcopy="iconv -t utf16 | clip.exe"
 
 export CLAUDE_CODE_SKIP_WINDOWS_PROFILE=1
 {{- end }}
