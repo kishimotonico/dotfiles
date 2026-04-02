@@ -31,6 +31,5 @@ function aws_ec2_start_instance() {
         && aws ec2 wait instance-running --instance-ids "$instance_id" \
         && aws ec2 describe-instances --instance-ids "$instance_id" \
         --query 'Reservations[0].Instances[0].[InstanceId,Tags[?Key==`Name`].Value | [0],State.Name,PrivateIpAddress,PublicIpAddress]' \
-        --output json | jq -r '[.[]] | ["InstanceId", "Name", "State", "PrivateIp", "PublicIp"], ["----------", "----", "-----", "---------", "--------"], .[] | @tsv' | column -t
+        --output json | jq -r '["InstanceId", "Name", "State", "PrivateIp", "PublicIp"], ["----------", "----", "-----", "---------", "--------"], (map(. // "")) | @tsv' | column -t
 }
-
