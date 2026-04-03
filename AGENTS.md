@@ -6,22 +6,14 @@
 
 README.mdを参照
 
-## 構造
+## コミットメッセージ
 
-- `run_once_*.sh`: 初回実行スクリプト (APTセットアップ、mise導入・インストール)
-- `dot_*`: ホームディレクトリに配置されるファイル (chezmoi命名規則)
-- `dot_config/`: `~/.config/` 配下の設定 (git, claude, mise, starship, zellij)
-- `scripts/`: AWS関連のヘルパースクリプト
-- `.chezmoi.toml.tmpl`: git名とメールアドレスをプロンプトで設定
-
-## mise管理ツール
-
-`dot_config/mise/config.toml`でツール一覧を管理:
-- CLI: aws-cli, fzf, jq, gh, lazygit, zoxide等
-- dev: node 24, go, uv, pnpm
-- npm global: biome, devcontainers/cli, aws-cdk等
-- AI: claude, gemini
-- その他: starship, zellij, dive, jj
+- 日本語
+- 軽微な修正の場合 `[Add|Update|Fix|Remove] ~/file-path: かんたんな説明（任意）`
+    - e.g. `Add ~/.config/foo/baz`
+    - e.g. `Update ~/.config/foo/bar: ほげふがした`
+    - コミットメッセージ本文は省略してもOK
+- それ以外、Conventional Commitsに従う
 
 ## CI/CD
 
