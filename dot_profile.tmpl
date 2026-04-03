@@ -33,6 +33,9 @@ export PLATFORMIO_CORE_DIR="$XDG_DATA_HOME/platformio"
 export CLAUDE_CONFIG_DIR="${XDG_CONFIG_HOME}/claude"
 export CODEX_HOME="${XDG_CONFIG_HOME}/codex"
 export PORTLESS_STATE_DIR="${XDG_STATE_HOME}/portless"
+export CARGO_HOME="$HOME/.local/share/cargo"
+export PATH="$CARGO_HOME/bin:$PATH"
+alias wget="wget --hsts-file=$XDG_DATA_HOME/wget-hsts"
 
 {{- if .isWsl }}
 # WSL固有設定 (Windowsの環境変数で `WSLENV = USERPROFILE/up:USERNAME/u` を設定しておく)

@@ -44,8 +44,8 @@ if [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
 fi
 
 # エイリアス
-alias ghcs="gh copilot suggest -t shell"
 alias dc="docker compose"
+alias lg="lazygit"
 
 # AWS CLI
 if command -v aws_completer > /dev/null 2>&1; then
@@ -101,10 +101,3 @@ if [ -f "$CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh" ]; then
     alias awssaml=set_aws_saml_login
 fi
 {{ end -}}
-
-# XDG準拠: Cargo
-export CARGO_HOME="$HOME/.local/share/cargo"
-export PATH="$CARGO_HOME/bin:$PATH"
-
-# xdg-ninja
-alias wget="wget --hsts-file=$XDG_DATA_HOME/wget-hsts"
