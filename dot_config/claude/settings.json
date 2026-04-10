@@ -71,5 +71,6 @@
       "ふぇぇ！"
     ]
   },
-  "voiceEnabled": true
+  "voiceEnabled": true,
+  "effortLevel": "high"
 }
