@@ -65,6 +65,17 @@ fi
 # mise
 eval "$(mise activate bash)"
 eval "$(mise completions bash --include-bash-completion-lib)"
+mise() {
+    case "$1" in
+        up|install)
+            # mise 経由の npm ツール更新時だけ release age 制約を外す
+            NPM_CONFIG_MIN_RELEASE_AGE=0 command mise "$@"
+            ;;
+        *)
+            command mise "$@"
+            ;;
+    esac
+}
 
 # Starship
 eval "$(starship init bash)"
