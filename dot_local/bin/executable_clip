@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+iconv -t UTF-16LE | clip.exe
