@@ -20,6 +20,10 @@
       "Bash(git show:*)",
       "Bash(npm run build:*)",
       "Bash(npm run lint)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm dev)",
       "Bash(uv run pytest:*)",
       "WebFetch(domain:github.com)",
       "mcp__chrome-devtools__click",
@@ -31,8 +35,12 @@
       "mcp__chrome-devtools__new_page",
       "mcp__chrome-devtools__take_screenshot",
       "mcp__chrome-devtools__take_snapshot",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
       "mcp__plugin_context7_context7__resolve-library-id",
-      "mcp__plugin_context7_context7__query-docs"
+      "mcp__plugin_context7_context7__query-docs",
+      "Skill(codex:rescue)",
+      "Skill(codex:explain)"
     ],
     "deny": [
       "Bash(rm:*)"
