@@ -79,6 +79,8 @@
       "ふぇぇ！"
     ]
   },
-  "voiceEnabled": true,
-  "effortLevel": "high"
+  "effortLevel": "high",
+  "remoteControlAtStartup": false,
+  "agentPushNotifEnabled": true,
+  "voiceEnabled": true
 }
