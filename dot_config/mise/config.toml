@@ -1,6 +1,9 @@
 [settings]
 idiomatic_version_file_enable_tools = ["python"]
 
+[settings.pipx]
+uvx = true
+
 [tools]
 aws-cli = "latest"
 fzf = "latest"
@@ -35,6 +38,8 @@ cloudflared = "latest"
 yazi = "latest"
 ripgrep = "latest"
 fd = "latest"
+tmux = "latest"
+"pipx:docling-slim" = "latest"
 
 [tools."npm:@openai/codex"]
 version = "latest"
