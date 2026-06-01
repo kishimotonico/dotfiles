@@ -39,7 +39,6 @@ yazi = "latest"
 ripgrep = "latest"
 fd = "latest"
 tmux = "latest"
-"pipx:docling-slim" = "latest"
 
 [tools."npm:@openai/codex"]
 version = "latest"
