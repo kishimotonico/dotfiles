@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# ssh-pf: SSH ポートフォワードをfzfで選んでkillする
+
+set -euo pipefail
+
+SELF="${BASH_SOURCE[0]}"
+
+# fzfプレビューモード（内部使用）
+if [[ "${1:-}" == "--_preview" ]]; then
+  pid="$2"
+  cmd=$(ps -p "$pid" -o args= 2>/dev/null || echo "(プロセスが終了しています)")
+  printf 'コマンド:\n  %s\n\nリスニングポート:\n' "$cmd"
+  ss -tlnp 2>/dev/null | grep "pid=$pid," \
+    | awk '{split($4,a,":"); printf "  :%s  %s\n", a[length(a)], $NF}' \
+    || printf '  なし\n'
+  exit 0
+fi
+
+command -v fzf >/dev/null 2>&1 || { printf 'error: fzf が必要です\n' >&2; exit 1; }
+
+# SSH ポートフォワードプロセスを列挙
+# 出力: "DISPLAY_TEXT\tPID"
+_list() {
+  # ps出力はPID/etimeが右詰め空白パディングされるため awk でフィールド分割
+  ps -eo pid=,etime=,args= 2>/dev/null | while IFS= read -r line; do
+    local pid elapsed cmd
+    pid=$(awk '{print $1}' <<< "$line")
+    elapsed=$(awk '{print $2}' <<< "$line")
+    cmd=$(awk '{$1=$2=""; sub(/^[[:space:]]+/,""); print}' <<< "$line")
+
+    # ssh コマンドかつ -L/-R/-D フラグあり
+    grep -qE '(^|/)ssh( |$)' <<< "$cmd" || continue
+    grep -qE ' -[A-Za-z]*[LRD]' <<< "$cmd" || continue
+
+    # フォワード仕様を抽出（-Lspec 結合形と -L spec スペース区切り両対応）
+    local specs=()
+    local tokens
+    read -ra tokens <<< "$cmd"
+    local i=0
+    while (( i < ${#tokens[@]} )); do
+      local tok="${tokens[$i]}"
+      # -fNL 形式: フラグで終わる → 次トークンが引数
+      if [[ "$tok" =~ ^-[A-Za-z]*([LRD])$ ]]; then
+        local ftype="${BASH_REMATCH[1]}"
+        (( i++ )) || true
+        specs+=("-${ftype} ${tokens[$i]:-}")
+      # -L123:host:456 形式: 引数が結合
+      elif [[ "$tok" =~ ^-[A-Za-z]*[LRD](.+)$ ]]; then
+        specs+=("$tok")
+      fi
+      (( i++ )) || true
+    done
+    [[ ${#specs[@]} -gt 0 ]] || continue
+
+    # SSH接続先ホストを抽出（引数を取るオプションをスキップ）
+    local dest="" skip=false
+    for tok in "${tokens[@]:1}"; do
+      if $skip; then skip=false; continue; fi
+      if [[ "$tok" =~ ^-[A-Za-z] ]]; then
+        # 末尾文字が引数オプションなら次トークンをスキップ
+        [[ "${tok: -1}" =~ [bcDeFIiJLlmOopQRSWw] ]] && skip=true
+      else
+        dest="$tok"
+        break
+      fi
+    done
+
+    local spec_str="${specs[*]}"
+
+    # -N フラグなし = リモートコマンドあり = 利用中のセッションかもしれない
+    local has_n=false
+    for tok in "${tokens[@]}"; do
+      [[ "$tok" =~ ^-[A-Za-z]*N ]] && { has_n=true; break; }
+    done
+    local tag; $has_n && tag="[pf]" || tag="[!!]"
+
+    local row
+    row=$(printf '%-8s %-13s %-6s %-24s %s' "$pid" "$elapsed" "$tag" "$spec_str" "${dest:-?}")
+    $has_n || row=$'\033[33m'"$row"$'\033[0m'  # [!!] は黄色で警告
+    printf '%s\t%s\n' "$row" "$pid"
+  done
+}
+
+main() {
+  local entries
+  entries=$(_list)
+
+  if [[ -z "$entries" ]]; then
+    printf 'SSH ポートフォワードプロセスが見つかりませんでした\n' >&2
+    exit 0
+  fi
+
+  local header
+  header=$(printf '%-8s %-13s %-6s %-24s %s' 'PID' 'ELAPSED' 'TYPE' 'FORWARDING' 'SSH HOST')
+
+  local selected
+  selected=$(printf '%s\n' "$entries" | fzf \
+    --ansi \
+    --multi \
+    --layout=reverse \
+    --delimiter=$'\t' \
+    --with-nth=1 \
+    --header="$header" \
+    --preview="'$SELF' --_preview {2}" \
+    --preview-window='down:8:wrap' \
+    --prompt='kill > ' \
+  ) || true
+
+  [[ -z "$selected" ]] && exit 0
+
+  local killed=0
+  while IFS=$'\t' read -r _display pid; do
+    local cmd
+    cmd=$(ps -p "$pid" -o args= 2>/dev/null || echo "")
+    if kill "$pid" 2>/dev/null; then
+      printf 'killed  PID %-6s  %s\n' "$pid" "$cmd"
+      (( killed++ )) || true
+    else
+      printf 'failed  PID %s\n' "$pid" >&2
+    fi
+  done <<< "$selected"
+
+  (( killed > 0 )) && printf '%d 件を終了しました\n' "$killed"
+  return 0
+}
+
+main "$@"
