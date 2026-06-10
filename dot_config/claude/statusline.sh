@@ -61,8 +61,9 @@ input=$(cat)
 
 # ── Model ──
 model=$(echo "$input" | jq -r '.model // empty')
-ver=$(echo "$model" | grep -oP '\d+[-.]\d+' | head -1 | tr '-' '.')
+ver=$(echo "$model" | grep -oP '\d+([-.]\d+)?' | head -1 | tr '-' '.' || true)
 case "$model" in
+  *fable*)  model_name="Fable${ver:+ $ver}" ;;
   *opus*)   model_name="Opus${ver:+ $ver}" ;;
   *sonnet*) model_name="Sonnet${ver:+ $ver}" ;;
   *haiku*)  model_name="Haiku${ver:+ $ver}" ;;
