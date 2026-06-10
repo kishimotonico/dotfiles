@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+# tmux-agent: tmuxのpane上で別エージェント(claude/codex等)を起動・操作するためのヘルパー。
+#
+# 各エージェントは専用ウィンドウ(既定: "agents")内のpaneとして起動する。
+# ウィンドウをむやみに増やさず、1枚のウィンドウにpaneをタイル配置して並べる。
+# name で参照し、内部では pane_id をレジストリ($TMPDIR/tmux-agent/panes/<name>)で追跡する。
+#
+# 想定する使い方(対話TUI重視):
+#   1. tmux-agent run  rev claude        # agentsウィンドウに claude TUI のpaneを作る
+#   2. tmux-agent wait rev               # 起動完了(=画面が落ち着く)まで待つ
+#   3. tmux-agent send rev "このPRをレビューして"  # プロンプト投入(複数行可)
+#   4. tmux-agent wait rev               # 応答完了まで待つ
+#   5. tmux-agent read rev               # pane内容を取得
+#   6. tmux-agent kill rev               # 後始末(paneを閉じる)
+#
+# headless(非対話)で投げたいときは:
+#   tmux-agent ask rev claude "1行で要約して"   # claude -p / codex exec を裏で実行
+#   tmux-agent ask rev -- codex exec review --base master   # 任意コマンドもOK
+#   tmux-agent wait rev                          # 完了は .done ファイルで判定
+#   cat "$(tmux-agent outfile rev)"              # 出力を読む
+#
+# 環境変数で挙動を調整:
+#   TMUX_AGENT_SESSION       対象セッション名 (既定: 呼び出し元の現在セッション)
+#   TMUX_AGENT_WINDOW        pane を集約するウィンドウ名 (既定: agents)
+#   TMUX_AGENT_POLL          waitのポーリング間隔秒 (既定: 1)
+#   TMUX_AGENT_IDLE_CYCLES   「落ち着いた」と見なす連続安定回数 (既定: 4)
+#   TMUX_AGENT_TIMEOUT       waitの既定タイムアウト秒 (既定: 300)
+
+set -euo pipefail
+
+POLL_INTERVAL="${TMUX_AGENT_POLL:-1}"
+IDLE_CYCLES="${TMUX_AGENT_IDLE_CYCLES:-4}"
+TIMEOUT_DEFAULT="${TMUX_AGENT_TIMEOUT:-300}"
+AGWIN="${TMUX_AGENT_WINDOW:-agents}"
+OUTDIR="${TMPDIR:-/tmp}/tmux-agent"
+PANEDIR="$OUTDIR/panes"
+
+SESSION="${TMUX_AGENT_SESSION:-}"
+if [ -z "$SESSION" ] && [ -n "${TMUX:-}" ]; then
+  SESSION="$(tmux display-message -p '#S' 2>/dev/null || true)"
+fi
+
+die() { printf 'tmux-agent: %s\n' "$*" >&2; exit 1; }
+
+command -v tmux >/dev/null 2>&1 || die "tmux が見つかりません"
+[ -n "${TMUX:-}" ] || [ -n "$SESSION" ] || die "tmux の外から実行する場合は TMUX_AGENT_SESSION を指定してください"
+
+# agentsウィンドウを完全一致で指すターゲット文字列
+winref() { if [ -n "$SESSION" ]; then printf '%s:=%s' "$SESSION" "$AGWIN"; else printf '=%s' "$AGWIN"; fi; }
+
+win_exists() {
+  tmux list-windows ${SESSION:+-t "$SESSION"} -F '#{window_name}' 2>/dev/null | grep -qx -- "$AGWIN"
+}
+
+pane_alive() { tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -qx -- "$1"; }
+
+# name -> pane_id を解決。paneが既に死んでいればレジストリを掃除してエラー。
+resolve() {
+  local f="$PANEDIR/$1" pid
+  [ -f "$f" ] || die "エージェント '$1' は未登録です (tmux-agent list)"
+  pid="$(cat "$f")"
+  pane_alive "$pid" || { rm -f "$f"; die "エージェント '$1' のpaneは既に終了しています"; }
+  printf '%s' "$pid"
+}
+
+assert_not_running() {
+  if [ -f "$PANEDIR/$1" ] && pane_alive "$(cat "$PANEDIR/$1")"; then
+    die "エージェント '$1' は既に起動中です"
+  fi
+}
+
+# 新しいpaneでコマンドを起動し、name で登録して pane_id を返す
+spawn_pane() {
+  local name="$1" cmdstr="$2" pid
+  mkdir -p "$PANEDIR"
+  assert_not_running "$name"
+  if win_exists; then
+    pid="$(tmux split-window -d -P -F '#{pane_id}' -t "$(winref)" "$cmdstr")"
+    tmux select-layout -t "$(winref)" tiled >/dev/null
+  else
+    pid="$(tmux new-window -d -P -F '#{pane_id}' ${SESSION:+-t "$SESSION"} -n "$AGWIN" "$cmdstr")"
+    # agentsウィンドウ名が勝手に書き換わると追跡できなくなるので固定し、
+    # pane境界にエージェント名(pane_title)を表示する。設定はこのウィンドウ限定。
+    tmux set-window-option -t "$(winref)" automatic-rename off >/dev/null 2>&1 || true
+    tmux set-window-option -t "$(winref)" allow-rename off >/dev/null 2>&1 || true
+    tmux set-window-option -t "$(winref)" pane-border-status top >/dev/null 2>&1 || true
+    tmux set-window-option -t "$(winref)" pane-border-format ' #{pane_title} ' >/dev/null 2>&1 || true
+  fi
+  tmux select-pane -t "$pid" -T "$name" 2>/dev/null || true
+  printf '%s' "$pid" > "$PANEDIR/$name"
+  printf '%s' "$pid"
+}
+
+# pane が一定回数連続で変化しなくなる(=エージェントがアイドル)まで待つ
+wait_idle() {
+  local pid="$1" timeout="$2" start now last="" cur stable=0
+  start="$(date +%s)"
+  while :; do
+    now="$(date +%s)"
+    [ $((now - start)) -lt "$timeout" ] || die "wait タイムアウト (${timeout}s)"
+    cur="$(tmux capture-pane -p -t "$pid" 2>/dev/null | cksum)"
+    if [ "$cur" = "$last" ]; then
+      stable=$((stable + 1))
+      [ "$stable" -ge "$IDLE_CYCLES" ] && return 0
+    else
+      stable=0; last="$cur"
+    fi
+    sleep "$POLL_INTERVAL"
+  done
+}
+
+# ask(headless)の完了を .done ファイルで待つ
+wait_done() {
+  local name="$1" timeout="$2" start now
+  start="$(date +%s)"
+  while [ ! -e "$OUTDIR/$name.done" ]; do
+    now="$(date +%s)"
+    [ $((now - start)) -lt "$timeout" ] || die "wait タイムアウト (${timeout}s)"
+    sleep "$POLL_INTERVAL"
+  done
+}
+
+usage() {
+  cat <<'EOF'
+tmux-agent <command> [args]   ... 別エージェントをtmuxのpaneで起動・操作する
+
+  run  <name> <command...>   agentsウィンドウに新paneを作りコマンドを起動
+  send <name> <text...>      対話TUIへテキスト投入(複数行可・自動でEnter送信)
+  type <name> <text...>      sendと同じだが末尾Enterを送らない
+  enter <name>               Enterのみ送信
+  read <name> [lines]        pane内容を取得(linesでスクロールバック行数指定)
+  wait <name> [--timeout N]  完了まで待つ(askは.done、それ以外は画面アイドルで判定)
+  ask  <name> claude|codex <prompt...>   headlessで実行(完了は.doneで判定)
+  ask  <name> -- <command...>            任意コマンドをheadlessで実行
+  outfile <name>             ask の出力ファイルパスを表示
+  focus <name>               そのpaneにカーソルを移動して画面に出す
+  list                       管理中エージェント一覧
+  kill <name>                paneを閉じて後始末
+EOF
+}
+
+cmd="${1:-}"; shift || true
+
+case "$cmd" in
+  run)
+    name="${1:-}"; shift || true
+    [ -n "$name" ] && [ $# -gt 0 ] || die "usage: tmux-agent run <name> <command...>"
+    # 前回askの残骸があるとwaitが.doneモードと誤判定するので掃除
+    rm -f "$OUTDIR/$name.out" "$OUTDIR/$name.done"
+    pid="$(spawn_pane "$name" "$*")"
+    printf "起動しました: %s (pane %s) -> %s\n" "$name" "$pid" "$*"
+    ;;
+
+  send|type)
+    name="${1:-}"; shift || true
+    [ -n "$name" ] && [ $# -gt 0 ] || die "usage: tmux-agent $cmd <name> <text...>"
+    pid="$(resolve "$name")"
+    # 複数行を安全に投入するため bracketed-paste で貼り付ける(改行が即送信されない)
+    printf '%s' "$*" | tmux load-buffer -b tmux-agent -
+    tmux paste-buffer -p -t "$pid" -b tmux-agent -d
+    if [ "$cmd" = "send" ]; then
+      sleep 0.4
+      tmux send-keys -t "$pid" Enter
+    fi
+    ;;
+
+  enter)
+    name="${1:-}"; [ -n "$name" ] || die "usage: tmux-agent enter <name>"
+    tmux send-keys -t "$(resolve "$name")" Enter
+    ;;
+
+  read)
+    name="${1:-}"; lines="${2:-}"
+    [ -n "$name" ] || die "usage: tmux-agent read <name> [lines]"
+    pid="$(resolve "$name")"
+    if [ -n "$lines" ]; then
+      tmux capture-pane -p -t "$pid" -S "-$lines"
+    else
+      tmux capture-pane -p -t "$pid"
+    fi
+    ;;
+
+  wait)
+    name="${1:-}"; shift || true
+    [ -n "$name" ] || die "usage: tmux-agent wait <name> [--timeout N]"
+    timeout="$TIMEOUT_DEFAULT"
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --timeout) timeout="${2:?--timeout に秒数が必要}"; shift 2;;
+        *) die "unknown option: $1";;
+      esac
+    done
+    # askで起動したもの(.outあり)は.doneで完了判定、それ以外は画面アイドル判定
+    if [ -e "$OUTDIR/$name.out" ]; then
+      wait_done "$name" "$timeout"
+    else
+      wait_idle "$(resolve "$name")" "$timeout"
+    fi
+    ;;
+
+  ask)
+    name="${1:-}"; shift || true
+    [ -n "$name" ] && [ $# -gt 0 ] || die "usage: tmux-agent ask <name> claude|codex <prompt...> | tmux-agent ask <name> -- <command...>"
+    mkdir -p "$OUTDIR"
+    assert_not_running "$name"
+    out="$OUTDIR/$name.out"; done="$OUTDIR/$name.done"
+    rm -f "$out" "$done"
+    if [ "$1" = "--" ]; then
+      shift
+      [ $# -gt 0 ] || die "usage: tmux-agent ask <name> -- <command...>"
+      inner="$*"
+    else
+      tool="$1"; shift
+      [ $# -gt 0 ] || die "usage: tmux-agent ask <name> claude|codex <prompt...>"
+      prompt="$*"
+      case "$tool" in
+        claude) inner="claude -p $(printf '%q' "$prompt")";;
+        codex)  inner="codex exec $(printf '%q' "$prompt")";;
+        *) die "tool は claude か codex を指定してください (任意コマンドは ask <name> -- <command...>)";;
+      esac
+    fi
+    # waitが.doneモードを判別できるよう、起動前に.outを作っておく
+    : > "$out"
+    # 出力をファイルに残し、終了したら .done を作成。paneは結果確認のため残す。
+    pid="$(spawn_pane "$name" \
+      "{ $inner; } 2>&1 | tee $(printf '%q' "$out"); touch $(printf '%q' "$done"); printf '\n[tmux-agent] 完了。Enterで閉じます'; read _")"
+    printf "headless実行を開始: %s (pane %s, 出力: %s)\n" "$name" "$pid" "$out"
+    ;;
+
+  outfile)
+    name="${1:-}"; [ -n "$name" ] || die "usage: tmux-agent outfile <name>"
+    printf '%s\n' "$OUTDIR/$name.out"
+    ;;
+
+  focus)
+    name="${1:-}"; [ -n "$name" ] || die "usage: tmux-agent focus <name>"
+    pid="$(resolve "$name")"
+    tmux select-window -t "$(winref)"
+    tmux select-pane -t "$pid"
+    ;;
+
+  list)
+    mkdir -p "$PANEDIR"
+    found=0
+    for f in "$PANEDIR"/*; do
+      [ -e "$f" ] || continue
+      found=1
+      name="$(basename "$f")"; pid="$(cat "$f")"
+      if pane_alive "$pid"; then
+        c="$(tmux display-message -p -t "$pid" '#{pane_current_command}' 2>/dev/null || echo '?')"
+        printf '%-16s %-6s [%s] alive\n' "$name" "$pid" "$c"
+      else
+        printf '%-16s %-6s dead\n' "$name" "$pid"
+      fi
+    done
+    [ "$found" -eq 1 ] || echo "(管理中のエージェントはありません)"
+    ;;
+
+  kill)
+    name="${1:-}"; [ -n "$name" ] || die "usage: tmux-agent kill <name>"
+    f="$PANEDIR/$name"
+    [ -f "$f" ] || die "エージェント '$name' は未登録です"
+    pid="$(cat "$f")"
+    pane_alive "$pid" && tmux kill-pane -t "$pid" 2>/dev/null || true
+    rm -f "$f" "$OUTDIR/$name.out" "$OUTDIR/$name.done" 2>/dev/null || true
+    printf "終了しました: %s\n" "$name"
+    ;;
+
+  ""|-h|--help|help) usage;;
+  *) die "unknown command: $cmd (tmux-agent help)";;
+esac
