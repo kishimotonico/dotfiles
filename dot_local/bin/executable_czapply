@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# czapply: chezmoi apply の対象ファイルをfzfで選んで適用するラッパー
+#
+# `chezmoi apply` は、ローカル(dest)側を手動編集したファイル(= chezmoi status の
+# 1列目が非空白のもの)について「上書きしますか？」という確認を1件ずつ出す。
+# この確認操作がしづらく誤って上書きしてしまいそうなので、czapply は事前に
+# fzfで対象を一覧・diffプレビューしながら選び、選んだものだけ
+# `chezmoi apply --force` でまとめて適用する。
+#
+# 2グループに分けて順に確認する:
+#   Step1 [安全]   ローカル変更なし(=確認なしで適用できる)もの。
+#                  起動時は全件選択済み。Tabで「適用しないもの」を外してEnter。
+#   Step2 [要確認] ローカル変更あり(=適用するとその変更が消える)もの。
+#                  起動時は未選択。Tabで「適用するもの」を選んでEnter。
+#                  適用前にローカル版を ~/.local/state/czapply/<timestamp>/ へ退避する。
+#
+# 各ステップは Esc でスキップできる(他方には影響しない)。
+#
+# 使い方:
+#   czapply
+
+set -euo pipefail
+
+SELF="${BASH_SOURCE[0]}"
+
+# fzfプレビューモード（内部使用）
+if [[ "${1:-}" == "--_preview" ]]; then
+  chezmoi diff --use-builtin-diff --color=true "$2" 2>&1 || true
+  exit 0
+fi
+
+die() { printf 'czapply: %s\n' "$*" >&2; exit 1; }
+
+command -v chezmoi >/dev/null 2>&1 || die "chezmoi が見つかりません"
+command -v fzf >/dev/null 2>&1 || die "fzf が見つかりません"
+
+TAB=$'\t'
+YELLOW=$'\033[33m'
+RESET=$'\033[0m'
+
+# chezmoi status を [安全]/[要確認] に振り分ける。
+# 各行は "表示用テキスト(ANSI色つき)\t絶対パス"
+safe_rows=()
+conflict_rows=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] || continue
+  x="${line:0:1}"
+  y="${line:1:1}"
+  [[ "$y" == ' ' ]] && continue  # apply で変化しないものは対象外
+  path="${line:3}"
+  label="${x}${y} ${path/#$HOME/\~}"
+  if [[ "$x" == ' ' ]]; then
+    safe_rows+=("${label}${TAB}${path}")
+  else
+    # 1列目が非空白 = ローカルで手動変更あり = 適用するとその変更が消える
+    conflict_rows+=("${YELLOW}${label}${RESET}${TAB}${path}")
+  fi
+done < <(chezmoi status --path-style=absolute)
+
+if (( ${#safe_rows[@]} == 0 && ${#conflict_rows[@]} == 0 )); then
+  printf '適用するものはありません\n'
+  exit 0
+fi
+
+fzf_select() {
+  fzf \
+    --ansi \
+    --multi \
+    --layout=reverse \
+    --delimiter="$TAB" \
+    --with-nth=1 \
+    --preview="'$SELF' --_preview {2}" \
+    --preview-window='right:60%:wrap' \
+    "$@"
+}
+
+apply_selected() {
+  local -n _rows=$1
+  local header=$2
+  shift 2
+
+  mapfile -t selected < <(printf '%s\n' "${_rows[@]}" | fzf_select --header="$header" "$@")
+  (( ${#selected[@]} > 0 )) || return 1
+
+  paths=()
+  for row in "${selected[@]}"; do
+    paths+=("${row##*"$TAB"}")
+  done
+  return 0
+}
+
+# Step1: 安全グループ（起動時は全選択 / 外したものは適用しない）
+if (( ${#safe_rows[@]} > 0 )); then
+  if apply_selected safe_rows \
+    '[安全] Tab:適用しないものを外す  Enter:残りを適用  Esc:スキップ' \
+    --bind 'load:select-all' \
+    --bind 'enter:transform([ "$FZF_SELECT_COUNT" -gt 0 ] && echo accept)'
+  then
+    chezmoi apply --force "${paths[@]}"
+    for p in "${paths[@]}"; do
+      printf '  applied: %s\n' "${p/#$HOME/\~}"
+    done
+    printf '[安全] %d 件を適用しました\n' "${#paths[@]}"
+  else
+    printf '[安全] スキップしました\n'
+  fi
+fi
+
+# Step2: 要確認グループ（起動時は未選択 / 選んだものだけ適用）
+if (( ${#conflict_rows[@]} > 0 )); then
+  if apply_selected conflict_rows \
+    '[要確認] 適用するとローカルの変更が消えます。Tab:適用するものを選択  Enter:確定  Esc:スキップ' \
+    --bind 'enter:transform([ "$FZF_SELECT_COUNT" -gt 0 ] && echo accept)'
+  then
+    backup_dir="${XDG_STATE_HOME:-$HOME/.local/state}/czapply/$(date +%Y%m%d-%H%M%S)"
+    for p in "${paths[@]}"; do
+      if [[ -e "$p" || -L "$p" ]]; then
+        dest="$backup_dir/${p#"$HOME"/}"
+        mkdir -p "$(dirname "$dest")"
+        cp -a "$p" "$dest"
+      fi
+    done
+
+    chezmoi apply --force "${paths[@]}"
+    for p in "${paths[@]}"; do
+      printf '  applied: %s\n' "${p/#$HOME/\~}"
+    done
+    printf '[要確認] %d 件を適用しました（バックアップ: %s）\n' "${#paths[@]}" "${backup_dir/#$HOME/\~}"
+  else
+    printf '[要確認] スキップしました\n'
+  fi
+fi
