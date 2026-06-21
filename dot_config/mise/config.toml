@@ -39,6 +39,7 @@ yazi = "latest"
 ripgrep = "latest"
 fd = "latest"
 tmux = "latest"
+rust = "latest"
 
 [tools."npm:@openai/codex"]
 version = "latest"
