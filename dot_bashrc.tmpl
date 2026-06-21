@@ -7,13 +7,17 @@ case $- in
       *) return;;
 esac
 
-HISTCONTROL=ignoreboth
+HISTCONTROL=ignoreboth:erasedups
 HISTSIZE=100000
 HISTFILESIZE=200000
 HISTIGNORE="cd:ll:ls -la:exit:clear:history:zi:y:code .:claude:codex:zellij:lz:lazygit:nr"
 
 shopt -s histappend
 shopt -s checkwinsize
+
+# tmuxの複数ペインでも履歴を即ファイルへ書き出す。
+# ペインがkillされても履歴が残り、新規ペインは全ペインの履歴を引き継いで起動する。
+PROMPT_COMMAND="history -a${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
 
 [ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
 
