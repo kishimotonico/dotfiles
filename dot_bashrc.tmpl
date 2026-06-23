@@ -51,6 +51,16 @@ fi
 alias dc="docker compose"
 alias lg="lazygit"
 
+# SSH先に tmux-256color の terminfo が無い環境でも vim 等が起動できるようにする。
+# OpenSSH はTTY確保時だけ TERM をSSH先へ通知するため、非対話SSHへの影響はない。
+ssh() {
+    if [ -n "$TMUX" ] && [ "$TERM" = "tmux-256color" ]; then
+        TERM=xterm-256color command ssh "$@"
+    else
+        command ssh "$@"
+    fi
+}
+
 # AWS CLI
 if command -v aws_completer > /dev/null 2>&1; then
     complete -C "$(command -v aws_completer)" aws
