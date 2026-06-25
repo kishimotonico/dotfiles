@@ -40,6 +40,10 @@ export PORTLESS_STATE_DIR="${XDG_STATE_HOME}/portless"
 export PATH="$CARGO_HOME/bin:$PATH"
 alias wget="wget --hsts-file=$XDG_DATA_HOME/wget-hsts"
 
+if [ -d "$XDG_DATA_HOME/mise/shims" ]; then
+    export PATH="$XDG_DATA_HOME/mise/shims:$PATH"
+fi
+
 {{- if .isWsl }}
 # WSL固有設定 (Windowsの環境変数で `WSLENV = USERPROFILE/up:USERNAME/u` を設定しておく)
 if [ -n "$USERPROFILE" ]; then
