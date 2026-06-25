@@ -36,6 +36,8 @@ command -v fzf >/dev/null 2>&1 || die "fzf が見つかりません"
 
 TAB=$'\t'
 YELLOW=$'\033[33m'
+GREEN=$'\033[32m'
+DIM=$'\033[2m'
 RESET=$'\033[0m'
 
 # chezmoi status を [安全]/[要確認] に振り分ける。
@@ -89,25 +91,67 @@ apply_selected() {
   return 0
 }
 
+# 適用/スキップの集計（最後にまとめて表示する）
+applied_count=0
+skipped_count=0
+backup_note=""
+
+# 配列名を受け取り、各行の末尾(タブ区切り)のパスだけを1行ずつ出力する。
+rows_paths() {
+  local -n _r=$1
+  local row
+  for row in "${_r[@]}"; do
+    printf '%s\n' "${row##*"$TAB"}"
+  done
+}
+
+# needle が以降の引数のいずれかと一致すれば 0。
+in_list() {
+  local needle=$1; shift
+  local x
+  for x in "$@"; do [[ "$x" == "$needle" ]] && return 0; done
+  return 1
+}
+
+report_applied() {
+  local p
+  for p in "$@"; do
+    printf '  %s✓ applied:%s %s\n' "$GREEN" "$RESET" "${p/#$HOME/\~}"
+    ((++applied_count))
+  done
+}
+
+report_skipped() {
+  local p
+  for p in "$@"; do
+    printf '  %s– skipped: %s%s\n' "$DIM" "${p/#$HOME/\~}" "$RESET"
+    ((++skipped_count))
+  done
+}
+
 # Step1: 安全グループ（起動時は全選択 / 外したものは適用しない）
 if (( ${#safe_rows[@]} > 0 )); then
+  mapfile -t group_paths < <(rows_paths safe_rows)
   if apply_selected safe_rows \
     '[安全] Tab:適用しないものを外す  Enter:残りを適用  Esc:スキップ' \
     --bind 'load:select-all' \
     --bind 'enter:transform([ "$FZF_SELECT_COUNT" -gt 0 ] && echo accept)'
   then
     chezmoi apply --force "${paths[@]}"
-    for p in "${paths[@]}"; do
-      printf '  applied: %s\n' "${p/#$HOME/\~}"
+    printf '[安全]\n'
+    report_applied "${paths[@]}"
+    for p in "${group_paths[@]}"; do
+      in_list "$p" "${paths[@]}" || report_skipped "$p"
     done
-    printf '[安全] %d 件を適用しました\n' "${#paths[@]}"
   else
-    printf '[安全] スキップしました\n'
+    printf '[安全]\n'
+    report_skipped "${group_paths[@]}"
   fi
 fi
 
 # Step2: 要確認グループ（起動時は未選択 / 選んだものだけ適用）
 if (( ${#conflict_rows[@]} > 0 )); then
+  mapfile -t group_paths < <(rows_paths conflict_rows)
   if apply_selected conflict_rows \
     '[要確認] 適用するとローカルの変更が消えます。Tab:適用するものを選択  Enter:確定  Esc:スキップ' \
     --bind 'enter:transform([ "$FZF_SELECT_COUNT" -gt 0 ] && echo accept)'
@@ -122,11 +166,20 @@ if (( ${#conflict_rows[@]} > 0 )); then
     done
 
     chezmoi apply --force "${paths[@]}"
-    for p in "${paths[@]}"; do
-      printf '  applied: %s\n' "${p/#$HOME/\~}"
+    backup_note="${backup_dir/#$HOME/\~}"
+    printf '[要確認]\n'
+    report_applied "${paths[@]}"
+    for p in "${group_paths[@]}"; do
+      in_list "$p" "${paths[@]}" || report_skipped "$p"
     done
-    printf '[要確認] %d 件を適用しました（バックアップ: %s）\n' "${#paths[@]}" "${backup_dir/#$HOME/\~}"
   else
-    printf '[要確認] スキップしました\n'
+    printf '[要確認]\n'
+    report_skipped "${group_paths[@]}"
   fi
+fi
+
+# まとめ
+printf '\n計 %d 件適用 / %d 件スキップ\n' "$applied_count" "$skipped_count"
+if [[ -n "$backup_note" ]]; then
+  printf 'バックアップ: %s\n' "$backup_note"
 fi
