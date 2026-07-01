@@ -80,6 +80,10 @@
     ]
   },
   "effortLevel": "high",
+  "tui": "fullscreen",
+  "attribution": {
+    "commit": ""
+  },
   "remoteControlAtStartup": false,
   "agentPushNotifEnabled": true,
   "voiceEnabled": true
