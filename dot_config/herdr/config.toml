@@ -1,0 +1,22 @@
+onboarding = false
+
+[keys]
+prefix = "ctrl+a"
+
+# tmux の Alt+h/j/k/l に合わせたペイン移動。
+focus_pane_left = ["prefix+h", "alt+h"]
+focus_pane_down = ["prefix+j", "alt+j"]
+focus_pane_up = ["prefix+k", "alt+k"]
+focus_pane_right = ["prefix+l", "alt+l"]
+
+# Herdr は tmux の swap-window 相当を公開していないため、Alt+i/o はタブ切り替えに寄せる。
+previous_tab = ["prefix+p", "alt+i"]
+next_tab = ["prefix+n", "alt+o"]
+
+new_tab = "prefix+c"
+rename_tab = "prefix+r"
+resize_mode = ""
+switch_tab = "prefix+1..9"
+
+split_horizontal = "prefix+minus"
+split_vertical = "prefix+v"
