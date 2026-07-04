@@ -73,11 +73,21 @@ codex exec resume <thread_id> --json -s workspace-write "<修正指示>" > "$out
 
 ## ユーザーが進捗を見たい場合
 
-「観戦したい」「ペインで見たい」と言われたら tmux-agent を使う。この場合は `--json` を外して人間可読にする(session id は出力冒頭のバナー `session id: <uuid>` 行から取れる):
+「観戦したい」「ペインで見たい」と言われたら、background Bash の代わりに herdr のペインで実行する。`HERDR_ENV` が `1` でなければ herdr 管理下にないので、その旨を伝えて通常の background Bash で実行する。
+
+この場合は `--json` を外して人間可読にする。session id は出力冒頭のバナー `session id: <uuid>` 行から取れる(バナーは stderr に出うるので `2>&1` でファイルにも残す。JSONL ではないので混ぜて問題ない):
 
 ```bash
-tmux-agent ask impl -- codex exec -s workspace-write '<指示>'
-tmux-agent wait impl --timeout 1800   # .done ファイルで完了判定
-cat "$(tmux-agent outfile impl)"
-tmux-agent kill impl                   # 報告後に後始末
+out=$(mktemp /tmp/codex-impl.XXXXXX.log)
+self=$(herdr pane list | jq -r --arg cwd "$PWD" '[.result.panes[] | select(.agent=="claude" and .cwd==$cwd)][0].pane_id')
+pane=$(herdr pane split "$self" --direction down --no-focus | jq -r '.result.pane.pane_id')
+herdr pane run "$pane" "codex exec -s workspace-write '<指示>' 2>&1 | tee $out"'; echo "CODEX""_DONE:$?"'
+herdr wait output "$pane" --match 'CODEX_DONE:' --timeout 1800000
+cat "$out"
 ```
+
+- マーカーを `"CODEX""_DONE"` と分割するのは、コマンドの入力エコー行に `wait output` が誤マッチするのを防ぐため(出力の `CODEX_DONE:<exit code>` だけがマッチする)
+- pane id は `w1:p1` のような形式。閉じると詰まって振り直されることがあるので、使う直前に `pane list` / `pane split` の応答から取る
+- タイムアウト時は exit code 1 で返る。`herdr pane read "$pane" --source recent-unwrapped --lines 50` で画面を確認して状況を報告する
+- 反復(手順4)が必要なら、控えた session id で同じペインに `codex exec resume <id> ...` を流用できる
+- 報告が終わったら `herdr pane close "$pane"` で後始末する(ユーザーが見終わったことを確認してから)
