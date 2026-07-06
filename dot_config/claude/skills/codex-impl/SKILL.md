@@ -39,6 +39,8 @@ codex exec --json -s workspace-write "<指示>" > "$out" 2>"$err" </dev/null
 - `--json` は thread_id とメッセージを確実に抽出するため
 - 長時間(10分以上)出力ファイルが伸びていなければフリーズの可能性。TaskStop で止めて報告する
 - サンドボックス制約: `-s workspace-write` はネットワーク既定無効。ブラウザ起動や listen は EPERM で失敗するので、その検証は委譲元側で行う(手順1の検証分担)
+- サンドボックスでは `.git` への書き込みも不可(`git add` が `Read-only file system` で失敗)。**Codexにコミット・ステージングを依頼しない**。プロンプトに「git commit はしないこと」と明記し、コミットは委譲元側で行う
+- `codex exec` は trusted directory(通常はgitリポジトリ内)で実行する。/tmp 等から実行すると `Not inside a trusted directory` で即エラーになる
 
 ### 3. 結果確認
 
@@ -60,10 +62,10 @@ Codexの自己申告を鵜呑みにせず、差分を自分でレビューする
 
 ### 4. 反復(必要な場合)
 
-修正を差し戻すときは、手順3で取った thread_id を明示して resume する:
+修正を差し戻すときは、手順3で取った thread_id を明示して resume する。**`resume` サブコマンドに `-s` は存在しない**(codex-cli 0.142.5 で確認。付けると `unexpected argument '-s'` で即エラー)。sandbox は `-c` で指定する:
 
 ```bash
-codex exec resume <thread_id> --json -s workspace-write "<修正指示>" > "$out2" 2>"$err2" </dev/null
+codex exec resume <thread_id> --json -c 'sandbox_mode="workspace-write"' "<修正指示>" > "$out2" 2>"$err2" </dev/null
 ```
 
 `resume --last` は使用禁止。並行で別のCodexセッション(レビューや別タスク)が動いていると、無関係なセッションを掴んで文脈が壊れるため、必ずIDを明示する。
