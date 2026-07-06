@@ -41,6 +41,7 @@ fd = "latest"
 tmux = "latest"
 rust = "latest"
 herdr = "latest"
+"npm:agmsg" = "latest"
 
 [tools."npm:@openai/codex"]
 version = "latest"
