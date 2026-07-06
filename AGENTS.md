@@ -6,6 +6,10 @@
 
 README.mdを参照
 
+## エージェント向けの注意
+
+- WSLでは `[diff]` にVSCode(`code --wait --diff`)が設定されているため、PATHに `code` がないエージェント環境では `chezmoi diff` が失敗する。差分確認は `chezmoi diff --use-builtin-diff` を使うこと
+
 ## コミットメッセージ
 
 - 日本語
