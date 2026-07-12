@@ -10,6 +10,8 @@ focus_pane_up = ["prefix+k", "alt+k"]
 focus_pane_right = ["prefix+l", "alt+l"]
 
 # Herdr は tmux の swap-window 相当を公開していないため、Alt+i/o はタブ切り替えに寄せる。
+previous_workspace = "prefix+comma"
+next_workspace = "prefix+."
 previous_tab = ["prefix+p", "alt+i"]
 next_tab = ["prefix+n", "alt+o"]
 
