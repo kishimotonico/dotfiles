@@ -22,3 +22,11 @@ switch_tab = "prefix+1..9"
 
 split_horizontal = "prefix+minus"
 split_vertical = "prefix+v"
+
+# Alt+F で一時的なシェルをポップアップ表示する。シェルを終了すると自動で閉じる。
+[[keys.command]]
+key = "alt+f"
+type = "popup"
+command = "bash"
+width = "80%"
+height = "80%"
