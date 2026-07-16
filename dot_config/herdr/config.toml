@@ -30,3 +30,6 @@ type = "popup"
 command = "bash"
 width = "80%"
 height = "80%"
+
+[ui]
+prompt_new_tab_name = false
