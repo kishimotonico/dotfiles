@@ -285,29 +285,6 @@ herdr wait agent-status 1-1 --status done --timeout 120000
 herdr pane read 1-1 --source recent --lines 100
 ```
 
-## answering a consult from another agent
-
-another agent pane (e.g. codex) may send you a message of the form:
-
-```
-[consult from=<pane_id>] <question>
-```
-
-when you receive one:
-
-1. answer the question using your normal tools. keep the user informed as usual.
-2. reply to the sender's pane in **one line** (a newline would submit mid-message):
-
-```bash
-herdr pane run <pane_id> '[reply from=YOUR_OWN_PANE_ID] <answer in one line>'
-```
-
-your own pane id is in `$HERDR_PANE_ID`.
-
-3. if the answer is long (review findings, code, diffs), write it to a temp file and send a one-line summary plus the file path instead.
-4. avoid single quotes inside the message body; rephrase or use a file.
-5. do not read the sender's pane to check whether they saw it — the injected input is queued and processed when their turn ends.
-
 ## notes
 
 - `workspace list`, `workspace create`, `tab list`, `tab create`, `tab get`, `tab focus`, `tab rename`, `tab close`, `pane list`, `pane get`, `pane split`, `wait output`, and `wait agent-status` print json on success.
