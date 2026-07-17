@@ -103,6 +103,9 @@ eval "$(starship init bash)"
 eval "$(zoxide init bash)"
 
 # tirith
+# 安全なコマンドの "tirith: no issues" は表示しない。
+# 警告・検出結果・エラーは引き続き表示される。
+export TIRITH_QUIET=1
 eval "$(tirith init --shell bash)"
 
 # rye (廃止予定)
