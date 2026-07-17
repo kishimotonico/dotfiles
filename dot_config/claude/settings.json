@@ -51,7 +51,7 @@
       "Read(./.env.*)"
     ]
   },
-  "model": "opusplan",
+  "model": "claude-fable-5[1m]",
   "statusLine": {
     "type": "command",
     "command": "cat | bash ~/.config/claude/statusline.sh"
@@ -79,7 +79,7 @@
       "ふぇぇ！"
     ]
   },
-  "effortLevel": "high",
+  "effortLevel": "medium",
   "tui": "fullscreen",
   "attribution": {
     "commit": ""
