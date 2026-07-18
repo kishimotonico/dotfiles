@@ -275,10 +275,11 @@ herdr pane read 1-3 --source recent-unwrapped --lines 40
 herdr pane split 1-2 --direction right --no-focus
 herdr pane run 1-3 "claude"
 herdr wait output 1-3 --match ">" --timeout 15000
+herdr agent wait 1-3 --status idle --timeout 15000
 herdr-msg send 1-3 "review the test coverage in src/api/"
 ```
 
-note: use `herdr-msg send` (in `~/.local/bin`), not `pane run`, when the target pane is an agent TUI. `pane run` delivers the bracketed-paste end marker and Enter in the same chunk, and depending on the herdr version agent TUIs may drop the Enter, leaving the text unsubmitted. `herdr-msg` sends the text and Enter as separate requests. `pane run` is fine for shell panes. `herdr-msg` also has `list` / `consult` / `reply` subcommands for inter-agent messaging — see `herdr-msg help` and the pane-consult skill.
+note: use `herdr-msg send` (in `~/.local/bin`), not `pane run`, when the target pane is an agent TUI. Wait until Herdr detects the agent first; `herdr-msg` intentionally rejects plain shells and not-yet-detected agents. `pane run` delivers the bracketed-paste end marker and Enter in the same chunk, and depending on the herdr version agent TUIs may drop the Enter, leaving the text unsubmitted. `herdr-msg` sends the text and Enter as separate requests. It resolves live agents through `herdr agent get`; `consult` / `reply` use terminal and native agent session identities reported by Herdr integrations to avoid stale pane ids and cross-session replies. `pane run` is fine for shell panes. See `herdr-msg help` and the pane-consult skill.
 
 ### coordinate with another agent
 
