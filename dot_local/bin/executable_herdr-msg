@@ -13,7 +13,7 @@
 #   herdr-msg consult <agent|pane_id|terminal_id> <本文>
 #                                          相談を送る。agent名(claude/codex等)なら
 #                                          同一タブ > 同一cwd の優先順で自動選択。
-#                                          [consult from=...] と返信手順を自動付与
+#                                          [consult from=...] と返信ヒントを自動付与
 #   herdr-msg pick <agent>                 自動選択結果のterminal_idだけ表示(送信しない)
 #   herdr-msg reply <reply_address> <本文>
 #                                          [reply from=...] を付与して返信。
@@ -217,7 +217,7 @@ case "$cmd" in
             target=$(pick_agent "$target")
         fi
         from=$(self_address)
-        deliver "$target" "[consult from=$from] $* (返信は herdr-msg reply $from '<返事を1行で>' で送って。長くなる場合はファイルに書いてそのパスを伝えて)"
+        deliver "$target" "[consult from=$from] $* (reply: herdr-msg reply $from '...')"
         echo "consult sent to $target" >&2
         ;;
     *)
