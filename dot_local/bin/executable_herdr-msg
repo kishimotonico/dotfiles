@@ -15,6 +15,7 @@
 #                                          同一タブ > 同一cwd の優先順で自動選択。
 #                                          [consult from=...] と返信ヒントを自動付与
 #   herdr-msg pick <agent>                 自動選択結果のterminal_idだけ表示(送信しない)
+#   herdr-msg history [n]                  送信履歴の末尾n件を表示(デフォルト20)
 #   herdr-msg reply <reply_address> <本文>
 #                                          [reply from=...] を付与して返信。
 #                                          terminal_idで現在のpaneを引き直し、
@@ -72,9 +73,49 @@ self_address() {
     fi
 }
 
+# ログ用の送信元。agent情報を取れなければpane IDへフォールバックする
+log_address() {
+    local address
+    if address=$(self_address 2>/dev/null); then
+        printf '%s\n' "$address"
+    elif [ -n "${HERDR_PANE_ID:-}" ]; then
+        printf '%s\n' "$HERDR_PANE_ID"
+    fi
+    return 0
+}
+
+history_file() {
+    printf '%s/.local/state/herdr-msg/log.jsonl\n' "$HOME"
+}
+
+# ログ失敗は送信結果に影響させない
+append_log() {
+    local kind="$1" from="$2" to="$3" text="$4" file dir
+    file=$(history_file)
+    dir=${file%/*}
+    (
+        umask 077
+        ts=$(date -u '+%Y-%m-%dT%H:%M:%SZ') &&
+            mkdir -p "$dir" &&
+            jq -cn \
+                --arg ts "$ts" \
+                --arg kind "$kind" \
+                --arg from "$from" \
+                --arg to "$to" \
+                --arg text "$text" \
+                '{
+                    ts: $ts,
+                    kind: $kind,
+                    from: (if $from == "" then null else $from end),
+                    to: $to,
+                    text: $text
+                }' >>"$file"
+    ) 2>/dev/null || true
+}
+
 # 1行テキストをagentへ送り、直前に宛先を再検証してEnterで確定する
 deliver() {
-    local target="$1" text="$2" expected_session="${3:-}" info terminal pane
+    local target="$1" text="$2" kind="$3" from="$4" expected_session="${5:-}" info terminal pane
     case "$text" in
         *$'\n'*) die "message must be a single line. write long content to a file and send its path instead" ;;
     esac
@@ -94,6 +135,7 @@ deliver() {
     validate_session "$info" "$expected_session" "the text may remain unsubmitted in the target input"
     pane=$(jq -er '.pane_id' <<<"$info")
     herdr pane send-keys "$pane" Enter
+    append_log "$kind" "$from" "$terminal" "$text"
 }
 
 # 自分以外のエージェントをjsonlで出力 (引数でagent名を絞り込み)
@@ -186,12 +228,21 @@ case "$cmd" in
         [ $# -ge 2 ] || die "usage: herdr-msg pick <agent>"
         pick_agent "$2"
         ;;
+    history)
+        [ $# -le 2 ] || die "usage: herdr-msg history [n]"
+        count="${2:-20}"
+        [[ "$count" =~ ^[0-9]+$ ]] || die "history count must be a non-negative integer"
+        file=$(history_file)
+        [ -f "$file" ] || exit 0
+        tail -n "$count" -- "$file"
+        ;;
     send)
         require_env
         [ $# -ge 3 ] || die "usage: herdr-msg send <agent_target> <text>"
         target="$2"
         shift 2
-        deliver "$target" "$*"
+        from=$(log_address)
+        deliver "$target" "$*" "send" "$from"
         ;;
     reply)
         require_env
@@ -200,7 +251,7 @@ case "$cmd" in
         shift 2
         parse_reply_address "$address"
         from=$(self_address)
-        deliver "$reply_target" "[reply from=$from] $*" "$reply_session"
+        deliver "$reply_target" "[reply from=$from] $*" "reply" "$from" "$reply_session"
         ;;
     consult)
         require_env
@@ -217,7 +268,7 @@ case "$cmd" in
             target=$(pick_agent "$target")
         fi
         from=$(self_address)
-        deliver "$target" "[consult from=$from] $* (reply: herdr-msg reply $from '...')"
+        deliver "$target" "[consult from=$from] $* (reply: herdr-msg reply $from '...')" "consult" "$from"
         echo "consult sent to $target" >&2
         ;;
     *)
@@ -226,6 +277,7 @@ case "$cmd" in
         [ $# -ge 2 ] || { usage >&2; exit 2; }
         target="$1"
         shift
-        deliver "$target" "$*"
+        from=$(log_address)
+        deliver "$target" "$*" "send" "$from"
         ;;
 esac
