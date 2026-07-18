@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # herdr-msg — herdr pane間のエージェントメッセージングヘルパー
 #
-# エージェントTUI宛の送信は send-text と send-keys Enter を分割して行う。
-# `herdr pane run` はpaste終端とEnterを同一チャンクで送るため、herdrの
-# バージョンによってはTUIがEnterを取りこぼし、入力欄にテキストが残る。
+# エージェントTUI宛の送信は、Enterの取りこぼしを避けるため send-text と
+# send-keys Enter を分割して行う。`herdr pane run` はpaste終端とEnterを
+# 同一チャンクで送るため、herdrのバージョンによってはTUIがEnterを取りこぼし、
+# 入力欄にテキストが残る。
 # (シェル宛は readline が正しく処理するため `herdr pane run` のままでよい)
 #
 # usage:
@@ -14,13 +15,16 @@
 #                                          同一タブ > 同一cwd の優先順でpaneを自動選択。
 #                                          [consult from=...] と返信手順を自動付与
 #   herdr-msg pick <agent>                 consultの自動選択結果のpane_idだけ表示(送信しない)
-#   herdr-msg reply <pane_id> <本文>       [reply from=...] を付与して返信
+#   herdr-msg reply <pane_id[@terminal_id]> <本文>
+#                                          [reply from=...] を付与して返信。
+#                                          @terminal_id付きなら現在のpane_idを
+#                                          引き直して誤送信を防ぐ
 #
 #   herdr-msg <pane_id> <text> は send の省略形(後方互換)
-set -eu
+set -euo pipefail
 
 usage() {
-    sed -n '2,/^set -eu/p' "$0" | sed 's/^# \{0,1\}//; $d'
+    sed -n '2,/^set -euo pipefail/p' "$0" | sed 's/^# \{0,1\}//; $d'
 }
 
 die() {
@@ -40,6 +44,8 @@ deliver() {
     esac
     [ -n "$text" ] || die "empty message"
     herdr pane send-text "$pane" "$text"
+    # TUIがpasteされたテキストを処理し終える前にEnterが届くと取りこぼされる
+    # ことがあるため、送信間隔を空ける
     sleep 0.3
     herdr pane send-keys "$pane" Enter
 }
@@ -54,27 +60,50 @@ list_agents() {
 }
 
 # 相談先paneを1つ選ぶ。同一タブ > 同一cwd の順で絞り込み、
-# 決めきれなければ候補を出して失敗する
+# タブ・cwdどちらにも一致する候補がなければ自動選択せず失敗する。
+# 絞り込み後も複数残って決めきれない場合も候補を出して失敗する
 pick_pane() {
-    local agent="$1" candidates pool narrowed my_tab
+    local agent="$1" candidates pool narrowed my_tab matched=0
     candidates=$(list_agents "$agent")
     [ -n "$candidates" ] || die "no pane found for agent '$agent'"
 
     pool="$candidates"
     my_tab=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tab_id')
     narrowed=$(jq -c --arg t "$my_tab" 'select(.tab_id == $t)' <<<"$pool")
-    [ -n "$narrowed" ] && pool="$narrowed"
+    if [ -n "$narrowed" ]; then
+        pool="$narrowed"
+        matched=1
+    fi
     narrowed=$(jq -c --arg cwd "$PWD" 'select(.cwd == $cwd)' <<<"$pool")
-    [ -n "$narrowed" ] && pool="$narrowed"
+    if [ -n "$narrowed" ]; then
+        pool="$narrowed"
+        matched=1
+    fi
 
-    if [ "$(wc -l <<<"$pool")" -gt 1 ]; then
+    if [ "$matched" -eq 0 ]; then
         {
-            echo "herdr-msg: multiple '$agent' panes found. pick one and rerun: herdr-msg consult <pane_id> <本文>"
+            echo "herdr-msg: no '$agent' pane in the same tab or cwd. specify one explicitly: herdr-msg consult <pane_id> <本文>"
             jq -c . <<<"$candidates"
         } >&2
         exit 2
     fi
+
+    if [ "$(wc -l <<<"$pool")" -gt 1 ]; then
+        {
+            echo "herdr-msg: multiple '$agent' panes found. pick one and rerun: herdr-msg consult <pane_id> <本文>"
+            jq -c . <<<"$pool"
+        } >&2
+        exit 2
+    fi
     jq -r '.pane_id' <<<"$pool"
+}
+
+# terminal_id から現在のpane_idを引く (再割当を自己修復するため)
+resolve_terminal() {
+    local term="$1" pane_id
+    pane_id=$(herdr pane list | jq -r --arg t "$term" '.result.panes[] | select(.terminal_id == $t) | .pane_id' | head -n1)
+    [ -n "$pane_id" ] || die "reply target terminal $term not found (the sender pane may have been closed)"
+    echo "$pane_id"
 }
 
 cmd="${1:-}"
@@ -101,10 +130,18 @@ case "$cmd" in
         ;;
     reply)
         require_env
-        [ $# -ge 3 ] || die "usage: herdr-msg reply <pane_id> <本文>"
+        [ $# -ge 3 ] || die "usage: herdr-msg reply <pane_id[@terminal_id]> <本文>"
         [ -n "${HERDR_PANE_ID:-}" ] || die "HERDR_PANE_ID is not set"
-        pane="$2"
+        target="$2"
         shift 2
+        if [[ "$target" == *@* ]]; then
+            term="${target#*@}"
+            pane=$(resolve_terminal "$term")
+        else
+            pane="$target"
+            target_agent=$(herdr pane get "$pane" | jq -r '.result.pane.agent // empty')
+            [ -n "$target_agent" ] || die "reply target $pane is not an agent pane (it may have been closed and reassigned). find the sender again with: herdr-msg list"
+        fi
         deliver "$pane" "[reply from=$HERDR_PANE_ID] $*"
         ;;
     consult)
@@ -119,7 +156,8 @@ case "$cmd" in
         else
             pane=$(pick_pane "$target")
         fi
-        deliver "$pane" "[consult from=$HERDR_PANE_ID] $* (返信は herdr-msg reply $HERDR_PANE_ID '<返事を1行で>' で送って。長くなる場合はファイルに書いてそのパスを伝えて)"
+        my_term=$(herdr pane get "$HERDR_PANE_ID" | jq -er '.result.pane.terminal_id')
+        deliver "$pane" "[consult from=$HERDR_PANE_ID@$my_term] $* (返信は herdr-msg reply $HERDR_PANE_ID@$my_term '<返事を1行で>' で送って。長くなる場合はファイルに書いてそのパスを伝えて)"
         echo "consult sent to $pane" >&2
         ;;
     *)

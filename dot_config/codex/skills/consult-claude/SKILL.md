@@ -5,7 +5,7 @@ description: herdrセッション内の別paneで動いているClaude Code (Fab
 
 # consult-claude — 別paneのClaudeに相談する
 
-herdr上では各paneが独立したエージェントとして動いている。pane間メッセージングは `herdr-msg`（`~/.local/bin/herdr-msg`）に集約されており、pane探索・メッセージ整形・確実な送信はスクリプト側がやる。
+herdr上では各paneが独立したエージェントとして動いている。pane間メッセージングは `herdr-msg`（`~/.local/bin/herdr-msg`）に集約されており、pane探索・メッセージ整形・Enter取りこぼしを避ける分割送信はスクリプト側がやる。
 
 ## 前提チェック
 
@@ -18,9 +18,10 @@ herdr-msg consult claude '<質問・依頼を1行で>'
 ```
 
 - **同一タブ > 同一cwd** の優先順でClaude paneを自動選択し、`[consult from=自分のpane ID]` と返信手順を自動で付与して送信する
-- 候補が複数で決めきれない場合は候補一覧（jsonl。`title` に相手の作業内容が出る）を出して exit 2 になる。ユーザーに確認するか、pane IDを指定して再実行する: `herdr-msg consult <pane_id> '<本文>'`。送信前に選択先だけ確かめたいときは `herdr-msg pick claude`
+- 同一タブ・同一cwdのどちらにも一致する候補がない場合は、候補が1つでも自動選択せず候補一覧（jsonl。`title` に相手の作業内容が出る）を出して exit 2 になる（誤送信防止）。絞り込み後も複数残って決めきれない場合も同様に exit 2 になる。いずれの場合もユーザーに確認するか、pane IDを指定して再実行する: `herdr-msg consult <pane_id> '<本文>'`。送信前に選択先だけ確かめたいときは `herdr-msg pick claude`
 - Claude paneが1つも見つからない場合は exit 1 になる。その旨をユーザーに伝えて終了する
 - 相手が `working` でも送ってよい（入力はキューされ、相手のターンが終わり次第処理される）
+- 返信先アドレスには永続的なterminal_idが自動付与される（例: `w1:pJ@term_...`）。相手の `herdr-msg reply` はこれを使い、pane ID再割当が起きていても現在のpaneへ正しく返信できる
 
 本文が長い場合（diffやコード、詳細な背景説明など）は一時ファイルに書き出し、本文には要約とファイルパスだけを書く:
 
@@ -40,7 +41,7 @@ herdr-msg consult claude '<要約> 詳細は /tmp/consult-XXXX.md を読んで'
 ## 注意
 
 - メッセージは必ず1行。改行を含むと `herdr-msg` がエラーで拒否する（長い内容はファイル経由）
-- 本文にシングルクォートを含めない。言い回しを変えるかファイル経由にする
+- シェル上で適切にクォートする（本文にシングルクォートを含む場合はダブルクォートで囲むなど）。複雑ならファイル経由にする
 - pane IDは永続的ではない。`herdr-msg` が毎回探し直すので、pane IDを覚えて使い回さないこと
 - 相手のpaneの画面を `herdr pane read` でスクレイピングして返事を探さないこと。返事は必ず自paneへの入力として届く
 - エージェントTUI宛に `herdr pane run` を使わないこと。herdrのバージョンによってはEnterが取りこぼされ、入力欄にテキストが残る。`herdr-msg` は分割送信でこれを回避している
