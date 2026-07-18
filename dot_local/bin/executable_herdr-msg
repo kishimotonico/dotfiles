@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# herdr-msg — herdr pane間のエージェントメッセージングヘルパー
+#
+# エージェントTUI宛の送信は send-text と send-keys Enter を分割して行う。
+# `herdr pane run` はpaste終端とEnterを同一チャンクで送るため、herdrの
+# バージョンによってはTUIがEnterを取りこぼし、入力欄にテキストが残る。
+# (シェル宛は readline が正しく処理するため `herdr pane run` のままでよい)
+#
+# usage:
+#   herdr-msg list [agent]                 エージェントpaneの一覧 (jsonl)
+#   herdr-msg send <pane_id> <text>        1行テキストを送信してEnter
+#   herdr-msg consult <agent|pane_id> <本文>
+#                                          相談を送る。agent名(claude/codex等)なら
+#                                          同一タブ > 同一cwd の優先順でpaneを自動選択。
+#                                          [consult from=...] と返信手順を自動付与
+#   herdr-msg pick <agent>                 consultの自動選択結果のpane_idだけ表示(送信しない)
+#   herdr-msg reply <pane_id> <本文>       [reply from=...] を付与して返信
+#
+#   herdr-msg <pane_id> <text> は send の省略形(後方互換)
+set -eu
+
+usage() {
+    sed -n '2,/^set -eu/p' "$0" | sed 's/^# \{0,1\}//; $d'
+}
+
+die() {
+    echo "herdr-msg: $*" >&2
+    exit 1
+}
+
+require_env() {
+    [ "${HERDR_ENV:-}" = "1" ] || die "not inside herdr (HERDR_ENV != 1)"
+}
+
+# 1行テキストを pane に送って Enter で確定する
+deliver() {
+    local pane="$1" text="$2"
+    case "$text" in
+        *$'\n'*) die "message must be a single line. write long content to a file and send its path instead" ;;
+    esac
+    [ -n "$text" ] || die "empty message"
+    herdr pane send-text "$pane" "$text"
+    sleep 0.3
+    herdr pane send-keys "$pane" Enter
+}
+
+# 自分以外のエージェントpaneを jsonl で出力 (引数で agent 名を絞り込み)
+list_agents() {
+    herdr pane list | jq -c --arg a "${1:-}" --arg self "${HERDR_PANE_ID:-}" '
+        .result.panes[]
+        | select(.agent != null and .pane_id != $self)
+        | select($a == "" or .agent == $a)
+        | {pane_id, agent, agent_status, tab_id, cwd, title: .terminal_title_stripped}'
+}
+
+# 相談先paneを1つ選ぶ。同一タブ > 同一cwd の順で絞り込み、
+# 決めきれなければ候補を出して失敗する
+pick_pane() {
+    local agent="$1" candidates pool narrowed my_tab
+    candidates=$(list_agents "$agent")
+    [ -n "$candidates" ] || die "no pane found for agent '$agent'"
+
+    pool="$candidates"
+    my_tab=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tab_id')
+    narrowed=$(jq -c --arg t "$my_tab" 'select(.tab_id == $t)' <<<"$pool")
+    [ -n "$narrowed" ] && pool="$narrowed"
+    narrowed=$(jq -c --arg cwd "$PWD" 'select(.cwd == $cwd)' <<<"$pool")
+    [ -n "$narrowed" ] && pool="$narrowed"
+
+    if [ "$(wc -l <<<"$pool")" -gt 1 ]; then
+        {
+            echo "herdr-msg: multiple '$agent' panes found. pick one and rerun: herdr-msg consult <pane_id> <本文>"
+            jq -c . <<<"$candidates"
+        } >&2
+        exit 2
+    fi
+    jq -r '.pane_id' <<<"$pool"
+}
+
+cmd="${1:-}"
+case "$cmd" in
+    help|-h|--help|"")
+        usage
+        exit 0
+        ;;
+    list)
+        require_env
+        list_agents "${2:-}"
+        ;;
+    pick)
+        require_env
+        [ $# -ge 2 ] || die "usage: herdr-msg pick <agent>"
+        pick_pane "$2"
+        ;;
+    send)
+        require_env
+        [ $# -ge 3 ] || die "usage: herdr-msg send <pane_id> <text>"
+        pane="$2"
+        shift 2
+        deliver "$pane" "$*"
+        ;;
+    reply)
+        require_env
+        [ $# -ge 3 ] || die "usage: herdr-msg reply <pane_id> <本文>"
+        [ -n "${HERDR_PANE_ID:-}" ] || die "HERDR_PANE_ID is not set"
+        pane="$2"
+        shift 2
+        deliver "$pane" "[reply from=$HERDR_PANE_ID] $*"
+        ;;
+    consult)
+        require_env
+        [ $# -ge 3 ] || die "usage: herdr-msg consult <agent|pane_id> <本文>"
+        [ -n "${HERDR_PANE_ID:-}" ] || die "HERDR_PANE_ID is not set"
+        target="$2"
+        shift 2
+        # pane ID指定 (例: w1:pA) ならそのまま、agent名なら自動選択
+        if list_agents | jq -e --arg p "$target" 'select(.pane_id == $p)' >/dev/null 2>&1; then
+            pane="$target"
+        else
+            pane=$(pick_pane "$target")
+        fi
+        deliver "$pane" "[consult from=$HERDR_PANE_ID] $* (返信は herdr-msg reply $HERDR_PANE_ID '<返事を1行で>' で送って。長くなる場合はファイルに書いてそのパスを伝えて)"
+        echo "consult sent to $pane" >&2
+        ;;
+    *)
+        # 後方互換: herdr-msg <pane_id> <text>
+        require_env
+        [ $# -ge 2 ] || { usage >&2; exit 2; }
+        pane="$1"
+        shift
+        deliver "$pane" "$*"
+        ;;
+esac
