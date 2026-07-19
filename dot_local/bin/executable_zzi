@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+
+set -u
+
+die() {
+    printf 'zzi: %s\n' "$*" >&2
+    exit 1
+}
+
+for command_name in herdr jq nc zoxide; do
+    command -v "$command_name" >/dev/null 2>&1 || die "$command_name is required"
+done
+
+[ "${HERDR_ENV:-}" = "1" ] || die "run this command inside herdr"
+[ -n "${HERDR_WORKSPACE_ID:-}" ] || die "HERDR_WORKSPACE_ID is not set"
+[ -S "${HERDR_SOCKET_PATH:-}" ] || die "herdr socket is not available"
+
+# tab.move was added after herdr 0.7.1 and currently has no CLI wrapper.
+if ! herdr api schema --json 2>/dev/null |
+    jq -e '.. | objects | select(.properties.method.const? == "tab.move")' >/dev/null; then
+    die "herdr with tab.move support is required (run: mise up herdr)"
+fi
+
+selected_dir=$(zoxide query --interactive -- "$@") || exit $?
+[ -d "$selected_dir" ] || die "selected path is not a directory: $selected_dir"
+
+base_name=$(basename -- "$selected_dir")
+tabs_json=$(herdr tab list --workspace "$HERDR_WORKSPACE_ID") || exit $?
+
+readarray -t tab_values < <(
+    jq -r --arg base "$base_name" '
+        .result.tabs
+        | map(
+            . + {
+                sequence: (
+                    if .label == $base then 1
+                    elif (.label | startswith($base))
+                         and (.label[($base | length):] | test("^[2-9][0-9]*$"))
+                    then (.label[($base | length):] | tonumber)
+                    else null
+                    end
+                )
+            }
+        )
+        | [.[] | select(.sequence != null)] as $matching
+        | if ($matching | length) == 0 then
+            $base, "-1"
+          else
+            ($matching | max_by(.sequence)) as $previous
+            | ($base + (($previous.sequence + 1) | tostring)),
+              ((map(.tab_id) | index($previous.tab_id)) + 1 | tostring)
+          end
+    ' <<<"$tabs_json"
+)
+
+tab_label=${tab_values[0]}
+insert_index=${tab_values[1]}
+
+created_json=$(
+    herdr tab create \
+        --workspace "$HERDR_WORKSPACE_ID" \
+        --cwd "$selected_dir" \
+        --label "$tab_label" \
+        --no-focus
+) || exit $?
+created_tab_id=$(jq -er '.result.tab.tab_id' <<<"$created_json") || die "failed to read the created tab id"
+
+if [ "$insert_index" -ge 0 ]; then
+    move_request=$(
+        jq -cn \
+            --arg tab_id "$created_tab_id" \
+            --argjson insert_index "$insert_index" \
+            '{id: "zzi:tab:move", method: "tab.move", params: {tab_id: $tab_id, insert_index: $insert_index}}'
+    )
+    move_response=$(printf '%s\n' "$move_request" | nc -U -W 1 "$HERDR_SOCKET_PATH")
+
+    if ! jq -e '.result and (.error | not)' >/dev/null <<<"$move_response"; then
+        herdr tab close "$created_tab_id" >/dev/null 2>&1
+        error_message=$(jq -r '.error.message // "tab.move failed"' <<<"$move_response")
+        die "$error_message"
+    fi
+fi
+
+herdr tab focus "$created_tab_id" >/dev/null
