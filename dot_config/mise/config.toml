@@ -46,6 +46,7 @@ rust = "latest"
 herdr = "latest"
 hunk = "latest"
 tirith = "latest"
+opencode = "latest"
 
 [tools."npm:@openai/codex"]
 version = "latest"
