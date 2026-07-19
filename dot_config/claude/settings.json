@@ -3,6 +3,23 @@
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "bash ~/.config/claude/hooks/herdr-agent-state.sh session",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ]
+  },
+  "attribution": {
+    "commit": ""
+  },
   "permissions": {
     "allow": [
       "mcp__aivisspeech__speak",
@@ -81,24 +98,8 @@
   },
   "effortLevel": "medium",
   "tui": "fullscreen",
-  "attribution": {
-    "commit": ""
-  },
+  "skipDangerousModePermissionPrompt": true,
   "remoteControlAtStartup": false,
   "agentPushNotifEnabled": true,
-  "voiceEnabled": true,
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "command": "bash ~/.config/claude/hooks/herdr-agent-state.sh session",
-            "timeout": 10,
-            "type": "command"
-          }
-        ],
-        "matcher": "*"
-      }
-    ]
-  }
+  "voiceEnabled": true
 }
