@@ -1,0 +1,11 @@
+[Unit]
+Description=Relocate Codex CLI log SQLite DBs to tmpfs (SSD wear guard)
+Documentation=https://github.com/openai/codex/issues/28224
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/.local/bin/codex-ramlogs
+
+[Install]
+WantedBy=default.target

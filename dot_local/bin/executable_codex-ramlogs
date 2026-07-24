@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+#
+# codex-ramlogs: Codex CLI の使い捨てログ用 SQLite DB を tmpfs(RAM) へ逃がす。
+#
+# 背景: Codex CLI は feedback ログを logs_*.sqlite に大量書き込みする不具合があり
+#       (openai/codex#28224)、SSD 寿命を削る。本体は 0.142〜0.143 で緩和済みだが、
+#       似た退行が再発してもSSDを痛めないよう、logs 系DBだけを常時 tmpfs に載せる。
+#
+# 対象は logs*.sqlite のみ。memories/goals/state は永続データなので触らない。
+# バージョン番号が上がっても (logs_2 -> logs_3) glob で自動追従する。
+# systemd user サービス経由でログイン時に実行される想定 (手動実行も可)。
+
+set -u
+
+RAMDIR="${CODEX_RAMLOGS_DIR:-/dev/shm/codex-logs}"
+CODEX_HOME="${CODEX_HOME:-$HOME/.config/codex}"
+
+log() { printf 'codex-ramlogs: %s\n' "$*"; }
+warn() { printf 'codex-ramlogs: %s\n' "$*" >&2; }
+
+[ -d "$CODEX_HOME" ] || { warn "CODEX_HOME not found: $CODEX_HOME"; exit 0; }
+
+mkdir -p "$RAMDIR" || { warn "cannot create RAM dir: $RAMDIR"; exit 1; }
+
+# 逃がし先が本当に RAM(tmpfs) か確認。そうでなければ黙ってSSDに書き続ける事故になるため警告。
+fstype=$(stat -f -c '%T' "$RAMDIR" 2>/dev/null || echo unknown)
+case "$fstype" in
+    tmpfs|ramfs) ;;
+    *) warn "WARNING: $RAMDIR is not tmpfs (detected: $fstype); logs will still hit disk" ;;
+esac
+
+shopt -s nullglob
+
+# メインDB (logs*.sqlite) を走査。-wal/-shm は SQLite が実体の隣に作るので個別symlinkはしない。
+for db in "$CODEX_HOME"/logs*.sqlite; do
+    base=$(basename "$db")
+
+    if [ -L "$db" ]; then
+        # 既にsymlink。RAMDIR を指していなければ張り直す (tmpfsが消えても実体は開いた時に作られる)。
+        case "$(readlink "$db")" in
+            "$RAMDIR"/*) ;;
+            *) rm -f "$db" && ln -s "$RAMDIR/$base" "$db" && log "repointed $base -> $RAMDIR" ;;
+        esac
+        continue
+    fi
+
+    # 通常ファイル: WAL整合性のため db 本体と -wal/-shm をまとめて移動してから symlink 化。
+    for ext in "" "-wal" "-shm"; do
+        [ -e "$db$ext" ] && mv -f "$db$ext" "$RAMDIR/$base$ext"
+    done
+    ln -s "$RAMDIR/$base" "$db" && log "moved $base -> $RAMDIR"
+done
+
+# CODEX_HOME に取り残された logs 用 -wal/-shm の実ファイル/古いsymlinkがあれば掃除。
+for stray in "$CODEX_HOME"/logs*.sqlite-wal "$CODEX_HOME"/logs*.sqlite-shm; do
+    [ -e "$stray" ] || [ -L "$stray" ] || continue
+    [ -L "$stray" ] || [ -f "$stray" ] && rm -f "$stray"
+done
+
+exit 0

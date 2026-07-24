@@ -1,0 +1,18 @@
+#!/bin/bash
+#
+# Codex ログ tmpfs 退避サービスを有効化する。
+# 下記ハッシュにより、unit / スクリプト本体が変わると再実行される。
+# unit:   {{ include "dot_config/systemd/user/codex-ramlogs.service" | sha256sum }}
+# script: {{ include "dot_local/bin/executable_codex-ramlogs" | sha256sum }}
+
+set -eu
+
+# systemd user インスタンスが使えない環境 (Docker/CI 等) ではスキップ。
+if ! command -v systemctl >/dev/null 2>&1 || ! systemctl --user show-environment >/dev/null 2>&1; then
+    echo "codex-ramlogs: systemd user instance unavailable; skipping enable" >&2
+    exit 0
+fi
+
+systemctl --user daemon-reload
+systemctl --user enable --now codex-ramlogs.service
+echo "codex-ramlogs: service enabled and started"
