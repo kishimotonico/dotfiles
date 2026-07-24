@@ -1,3 +1,15 @@
 {
-  "$schema": "https://opencode.ai/config.json"
+  "$schema": "https://opencode.ai/config.json",
+  // メイン(会話・意思決定担当)は Kimi K3
+  "model": "opencode-go/kimi-k3",
+  "agent": {
+    // 調査系の組み込みサブエージェントは軽量なコーディング向けモデルで動かす
+    // (未指定だと呼び出し元のモデルを継承してトークン効率が悪いため)
+    "general": {
+      "model": "opencode-go/kimi-k2.7-code"
+    },
+    "explore": {
+      "model": "opencode-go/kimi-k2.7-code"
+    }
+  }
 }
