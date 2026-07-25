@@ -1,6 +1,13 @@
 # ~/.bashrc
 # managed by chezmoi
 
+# 環境変数は対話・非対話を問わず読み込む。
+# bash は sshd 越しの非対話実行でも ~/.bashrc を読むため、ここに置いておくと
+# `ssh host <command>` や herdr --remote 経由の起動でも環境変数が揃う。
+if [ -f "$HOME/.config/shell/env.sh" ]; then
+    . "$HOME/.config/shell/env.sh"
+fi
+
 # If not running interactively, don't do anything
 case $- in
     *i*) ;;
@@ -27,16 +34,12 @@ alias grep='grep --color=auto'
 alias fgrep='fgrep --color=auto'
 alias egrep='egrep --color=auto'
 alias ll='ls -alFh'
+alias wget="wget --hsts-file=$XDG_DATA_HOME/wget-hsts"
 alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
 
 if [ -f ~/.bash_aliases ]; then
   . ~/.bash_aliases
 fi
-
-case ":$PATH:" in
-    *":$HOME/.local/bin:"*) ;;
-    *) PATH="$HOME/.local/bin:$PATH" ;;
-esac
 
 if [ -f /usr/share/bash-completion/bash_completion ]; then
   . /usr/share/bash-completion/bash_completion
@@ -131,6 +134,7 @@ function y() {
 # WSL固有設定
 alias explorer="explorer.exe"
 alias xdg-open=wsl-open
+alias pbcopy=clip
 
 if [ -f "$CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh" ]; then
     source "$CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh"
