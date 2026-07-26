@@ -7,7 +7,7 @@ description: Cursor Agent CLI (cursor-agent -p) に実装・修正・調査タ�
 
 Cursor Agent CLI に実装・修正タスクを委譲し、結果をレビューして報告する。やることは codex-impl / opencode-impl と同じで、依頼先が Cursor Agent という違いだけ。
 
-モデルは `--model composer-2.5` を既定にする。他のモデルを使うのはユーザーが指定したときだけ(`cursor-agent --list-models` で一覧が出る)。
+**`--model composer-2.5` を必ず明示する**。省略すると `Composer 2.5 Fast` が選ばれ、Fast は料金が高い。`~/.cursor/cli-config.json` に `selectedModel` を書いても `-p` の既定は変わらなかったので、フラグで指定するしかない(2026.07.23-e383d2b で確認)。他のモデルを使うのはユーザーが指定したときだけ(`cursor-agent --list-models` で一覧が出る)。
 
 ## 権限フラグ(先に読む)
 
