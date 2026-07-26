@@ -20,7 +20,7 @@ Cursor Agent CLI に実装・修正タスクを委譲し、結果をレビュー
 - `--sandbox enabled` は WSL では効かなかった。ワークスペース外(ホームディレクトリ直下)への書き込みが素通りする。**隔離を期待しない**
 - `-p` では承認待ちでハングしない。実行できない操作は失敗としてモデルに返り、代替を試すか報告してくる
 
-隔離が要る作業(ワークスペース外に触れる、複数エージェントの並行実行)は `-w, --worktree <name>` を使う。ただし作成先は `CURSOR_DATA_DIR` を無視して `~/.cursor/worktrees/<repo>/<name>` 固定。ホーム直下を汚したくないので、常用せず必要なときだけにして、終わったら消す。
+隔離が要る作業(ワークスペース外に触れる、複数エージェントの並行実行)は `-w, --worktree <name>` を使う。`~/.cursor/worktrees/<repo>/<name>` に git worktree を作るので、終わったら `git worktree remove` で片付ける。
 
 ## 手順
 
@@ -82,7 +82,7 @@ jq -cR 'fromjson? // empty | select(.type=="result") | {is_error, subtype, sessi
 
 モデル名は `system` 行にしか出ない。`result` 行に `model` フィールドは無いので、そちらを見ると常に null になる。同じ `system` 行の `permissionMode` は `--auto-review` を付けても `default` のままなので当てにしない。
 
-作業ログの全文は `$CURSOR_DATA_DIR/projects/<パスをスラグ化したもの>/agent-transcripts/<session_id>/<session_id>.jsonl` に残る。ツール呼び出し単位で追える。
+作業ログの全文は `~/.cursor/projects/<パスをスラグ化したもの>/agent-transcripts/<session_id>/<session_id>.jsonl` に残る。ツール呼び出し単位で追える。
 
 ### 4. 反復(必要な場合)
 
@@ -115,7 +115,7 @@ cat "$out"
 - ペインで見せるときは `--output-format` を外してテキスト出力にする。この場合セッションIDは出力に出ないので、反復が必要なら transcript のディレクトリ名から拾う
 
     ```bash
-    basename "$(ls -1td "${CURSOR_DATA_DIR:-$HOME/.cursor}"/projects/*/agent-transcripts/*/ | head -1)"
+    basename "$(ls -1td ~/.cursor/projects/*/agent-transcripts/*/ | head -1)"
     ```
 
     最終更新が最新のものを採るだけなので、並行して別セッションを走らせているときは当てにならない
