@@ -40,28 +40,47 @@ Cursorはこの会話の文脈を知らない前提で、自己完結したプ�
 実装は数分かかるので、必ず `run_in_background: true` で実行する。プロジェクトディレクトリから実行する。
 
 ```bash
-out=$(mktemp /tmp/cursor-impl.XXXXXX.json)
+out=$(mktemp /tmp/cursor-impl.XXXXXX.jsonl)
 err=$(mktemp /tmp/cursor-impl.XXXXXX.err)
 echo "output: $out / stderr: $err"
-cursor-agent -p --trust --auto-review --model composer-2.5 --output-format json "<指示>" > "$out" 2>"$err" </dev/null
+cursor-agent -p --trust --auto-review --model composer-2.5 --output-format stream-json "<指示>" > "$out" 2>"$err" </dev/null
 ```
 
+**`--output-format json` は使わない**。全部終わってから単一オブジェクトを一度に吐くので、終わるまで出力が完全に無音になる。10分級の作業だとフリーズか作業中か区別が付かない。`stream-json` なら1行ずつ流れてくるうえ、最後の `result` 行に `json` と同じ内容がそのまま入るので、失うものがない。
+
 - 実行中はClaudeは working tree を変更しない(並行編集事故の防止。読み取りはOK)
-- `--output-format json` は**全部終わってから単一オブジェクトを一度に吐く**。途中経過は見えないので、進捗を追いたいときは `--output-format stream-json --stream-partial-output` にする
-- 長時間(10分以上)出力ファイルが空のままならフリーズの可能性。TaskStop で止めて報告する
+- 生存確認は `wc -l "$out"` か `tail -2 "$out"`。行が増えていれば動いている
+- 長時間(10分以上)行数が伸びていなければフリーズの可能性。TaskStop で止めて報告する
+- `--stream-partial-output` はテキストをトークン単位に刻むだけで、行数が無駄に増えて読みにくい。人間が横で眺めるとき以外は付けない
 
 ### 3. 結果確認
 
-出力は1行のJSONオブジェクト。`jq` でそのまま読める:
+**先に差分を見る。`.result` を読むのは後**。Cursorの最終報告は良く書けたMarkdownレポートなので、先に読むとそのフレーミングに引きずられて差分レビューが甘くなる。
 
 ```bash
-jq -r '.result' "$out"                     # 最終報告
-jq -r '.session_id' "$out"                 # セッションID(反復用に控える)
-jq -r '.is_error, .subtype, .usage' "$out" # 失敗判定とトークン消費
-git status --short && git diff             # 実際の変更
+git status --short && git diff                 # まず自分の目で見る
 ```
 
-`is_error` が false でも、Shell拒否で検証を飛ばしていることがある。Cursorの自己申告を鵜呑みにせず、差分を自分でレビューし、ビルド・テスト・lintは自分でも回す。
+そのうえでログから拾う:
+
+```bash
+# 触ったファイル(自己申告ではなくツール呼び出しの記録)
+jq -rR 'fromjson? // empty | .tool_call.editToolCall.args.path // .tool_call.writeToolCall.args.path // empty' "$out" | sort -u
+
+# 実際に走らせたコマンド(検証を飛ばしていないかの確認)
+jq -rR 'fromjson? // empty | .tool_call.shellToolCall.args.command // empty' "$out" | sort -u
+
+# 実際に使われたモデルと作業ディレクトリ
+jq -cR 'fromjson? // empty | select(.type=="system") | {model, cwd, session_id}' "$out"
+
+# 最終報告・失敗判定・トークン消費(result行は json 形式の出力と同一)
+jq -rR 'fromjson? // empty | select(.type=="result") | .result' "$out"
+jq -cR 'fromjson? // empty | select(.type=="result") | {is_error, subtype, session_id, usage}' "$out"
+```
+
+`is_error` が false でも、Shell拒否で検証を飛ばしていることがある。shellToolCall の一覧が空なら、テストを回したという報告は嘘。Cursorの自己申告を鵜呑みにせず、ビルド・テスト・lintは自分でも回す。
+
+モデル指定が効いたかは `system` 行の `model` で確認できる(`--model composer-2.5-fast` を渡すと `"Composer 2.5 Fast"` に変わる)。`result` 行には `model` フィールドが無いので、そちらを見ると常に null になる。同じ `system` 行の `permissionMode` は `--auto-review` を付けても `default` のままなので当てにしない。
 
 作業ログの全文が要るときは `~/.cursor/projects/<パスをスラグ化したもの>/agent-transcripts/<session_id>/<session_id>.jsonl` に残っている。ツール呼び出し単位で追える。
 
@@ -70,7 +89,7 @@ git status --short && git diff             # 実際の変更
 修正を差し戻すときは、手順3で取ったセッションIDを明示して継続する:
 
 ```bash
-cursor-agent -p --resume <session_id> --trust --auto-review --model composer-2.5 --output-format json "<修正指示>" > "$out2" 2>"$err2" </dev/null
+cursor-agent -p --resume <session_id> --trust --auto-review --model composer-2.5 --output-format stream-json "<修正指示>" > "$out2" 2>"$err2" </dev/null
 ```
 
 `--continue`(直前セッションの継続)は使用禁止。並行で別セッションが動いていると無関係なセッションを掴むため、必ずIDを明示する。継続時も `session_id` は同じ値が返る。
