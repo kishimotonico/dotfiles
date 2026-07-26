@@ -84,7 +84,7 @@ herdrペイン上の常駐Codexに委譲し、`herdr-msg` で質問や完了報�
 self=$(herdr pane list | jq -r --arg cwd "$PWD" '[.result.panes[] | select(.agent=="claude" and .cwd==$cwd)][0].pane_id')
 pane=$(herdr pane split "$self" --direction down --no-focus | jq -r '.result.pane.pane_id')
 herdr pane run "$pane" "codex -a never"
-herdr agent wait "$pane" --status idle --timeout 30000
+herdr agent wait "$pane" --until idle --timeout 30000
 details=$(mktemp /tmp/codex-impl.XXXXXX.md)
 # Writeツールで、背景・対象・期待する結果・制約・検証分担を $details に書く
 herdr-msg consult "$pane" "<概要>。詳細は $details を読んで。完了報告・質問はreplyで"
