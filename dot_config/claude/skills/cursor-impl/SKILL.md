@@ -7,9 +7,7 @@ description: Cursor Agent CLI (cursor-agent -p) に実装・修正・調査タ�
 
 Cursor Agent CLI に実装・修正タスクを委譲し、結果をレビューして報告する。やることは codex-impl / opencode-impl と同じで、依頼先が Cursor Agent という違いだけ。
 
-**`--model composer-2.5` を必ず明示する**。省略時のモデルは `~/.config/cursor/cli-config.json` の `selectedModel` に従うので、ユーザーが対話TUIで選んだものに引きずられる。実際そこには `parameters: [{id:"fast", value:"true"}]` が入っていて、無指定だと料金の高い `Composer 2.5 Fast` になる。委譲側の設定に依存しないよう、常にフラグで固定する。
-
-Fast かどうかはモデルIDではなくパラメータで決まる。`--model 'composer-2.5[fast=false]'` のようにブラケットで明示もできる(`--model composer-2.5` だけでも Fast にはならない)。他のモデルを使うのはユーザーが指定したときだけ(`cursor-agent --list-models` で一覧が出る)。
+**`--model composer-2.5` を必ず明示する**。省略時は `~/.config/cursor/cli-config.json` の `selectedModel` に従うため、ユーザーが対話TUIで選んだ設定に引きずられる。そこには `fast` パラメータが入っていることがあり、無指定だと料金の高い `Composer 2.5 Fast` になる。他のモデルを使うのはユーザーが指定したときだけ(`cursor-agent --list-models` で一覧が出る)。
 
 ## 権限フラグ(先に読む)
 
@@ -19,10 +17,10 @@ Fast かどうかはモデルIDではなくパラメータで決まる。`--mode
 - 権限フラグなしの `-p` では、ファイル編集は通るが **Shell がすべて拒否される**。「テストは実行できませんでした」と報告してくるので、検証させたいなら `--auto-review` を付ける
 - `--auto-review` はサーバ側分類器が安全な操作を自動実行する。ただし `sudo rm -rf <path>` すら承認を挟まず実行に回した。**安全弁として当てにしない**
 - `--force` / `--yolo` は全許可。`--auto-review` で足りるので原則使わない
-- `--sandbox enabled` は WSL では効かなかった。ワークスペース外(`/home/nico` 直下)への書き込みが素通りする。**隔離を期待しない**
+- `--sandbox enabled` は WSL では効かなかった。ワークスペース外(ホームディレクトリ直下)への書き込みが素通りする。**隔離を期待しない**
 - `-p` では承認待ちでハングしない。実行できない操作は失敗としてモデルに返り、代替を試すか報告してくる
 
-隔離が要る作業(ワークスペース外に触れる、複数エージェントの並行実行)は `-w, --worktree <name>` を使う。`~/.cursor/worktrees/<repo>/<name>` に git worktree を作る。
+隔離が要る作業(ワークスペース外に触れる、複数エージェントの並行実行)は `-w, --worktree <name>` を使う。ただし作成先は `CURSOR_DATA_DIR` を無視して `~/.cursor/worktrees/<repo>/<name>` 固定。ホーム直下を汚したくないので、常用せず必要なときだけにして、終わったら消す。
 
 ## 手順
 
@@ -82,9 +80,9 @@ jq -cR 'fromjson? // empty | select(.type=="result") | {is_error, subtype, sessi
 
 `is_error` が false でも、Shell拒否で検証を飛ばしていることがある。shellToolCall の一覧が空なら、テストを回したという報告は嘘。Cursorの自己申告を鵜呑みにせず、ビルド・テスト・lintは自分でも回す。
 
-モデル指定が効いたかは `system` 行の `model` で確認できる(`--model composer-2.5-fast` を渡すと `"Composer 2.5 Fast"` に変わる)。`result` 行には `model` フィールドが無いので、そちらを見ると常に null になる。同じ `system` 行の `permissionMode` は `--auto-review` を付けても `default` のままなので当てにしない。
+モデル名は `system` 行にしか出ない。`result` 行に `model` フィールドは無いので、そちらを見ると常に null になる。同じ `system` 行の `permissionMode` は `--auto-review` を付けても `default` のままなので当てにしない。
 
-作業ログの全文が要るときは `~/.cursor/projects/<パスをスラグ化したもの>/agent-transcripts/<session_id>/<session_id>.jsonl` に残っている。ツール呼び出し単位で追える。
+作業ログの全文は `$CURSOR_DATA_DIR/projects/<パスをスラグ化したもの>/agent-transcripts/<session_id>/<session_id>.jsonl` に残る。ツール呼び出し単位で追える。
 
 ### 4. 反復(必要な場合)
 
@@ -114,14 +112,13 @@ herdr wait output "$pane" --match 'CURSOR_DONE:' --timeout 1800000
 cat "$out"
 ```
 
-- ペインで見せるときは `--output-format` を外してテキスト出力にする。この場合セッションIDは出力に出ないので、反復が必要なら transcript のディレクトリ名から拾う(更新順に並ぶので先頭が最新)
+- ペインで見せるときは `--output-format` を外してテキスト出力にする。この場合セッションIDは出力に出ないので、反復が必要なら transcript のディレクトリ名から拾う
 
     ```bash
-    slug=$(echo "$PWD" | sed 's#^/##; s#[/_.]#-#g; s#-\+#-#g')
-    ls -1t ~/.cursor/projects/"$slug"/agent-transcripts/ | head -1
+    basename "$(ls -1td "${CURSOR_DATA_DIR:-$HOME/.cursor}"/projects/*/agent-transcripts/*/ | head -1)"
     ```
 
-    スラグ化の規則は推測なので、当たらなければ `ls -1t ~/.cursor/projects/` から目視で探す
+    最終更新が最新のものを採るだけなので、並行して別セッションを走らせているときは当てにならない
 
 - マーカーを `"CURSOR""_DONE"` と分割するのは、入力エコー行への誤マッチ防止(出力の `CURSOR_DONE:<exit code>` だけがマッチする)
 - タイムアウト時は `herdr pane read "$pane" --source recent-unwrapped --lines 50` で画面を確認して状況を報告する
