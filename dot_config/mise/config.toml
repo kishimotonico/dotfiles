@@ -23,7 +23,7 @@ go = "latest"
 "npm:portless" = "latest"
 "npm:@nulab/bee" = "latest"
 "npm:agent-browser" = "latest"
-"npm:@getpaseo/cli" = "latest"
+"npm:@getpaseo/cli" = { version = "latest", trust_policy_excludes = ["@hono/node-server"] }
 "npm:agmsg" = "latest"
 "npm:backlog.md" = "latest"
 pnpm = "latest"
