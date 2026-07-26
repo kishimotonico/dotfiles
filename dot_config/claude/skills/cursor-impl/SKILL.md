@@ -20,6 +20,8 @@ Cursor Agent CLI に実装・修正タスクを委譲し、結果をレビュー
 - `--sandbox enabled` は WSL では効かなかった。ワークスペース外(ホームディレクトリ直下)への書き込みが素通りする。**隔離を期待しない**
 - `-p` では承認待ちでハングしない。実行できない操作は失敗としてモデルに返り、代替を試すか報告してくる
 
+`--auto-review` は Shell を通すので、実質的にユーザー権限をそのままモデルに渡すのと同じ。プロンプトに書いた禁止事項は安全境界にならない。自分が管理している信頼済みリポジトリ、本番の資格情報が無い環境、普段使いでないブラウザプロファイル、この条件が揃うときに使う。外部由来のコードを動かす場合や、本番・共有環境に接続できる状態では使わない。
+
 隔離が要る作業(ワークスペース外に触れる、複数エージェントの並行実行)は `-w, --worktree <name>` を使う。`~/.cursor/worktrees/<repo>/<name>` に git worktree を作るので、終わったら `git worktree remove` で片付ける。
 
 ## 手順
@@ -78,7 +80,7 @@ jq -rR 'fromjson? // empty | select(.type=="result") | .result' "$out"
 jq -cR 'fromjson? // empty | select(.type=="result") | {is_error, subtype, session_id, usage}' "$out"
 ```
 
-`is_error` が false でも、Shell拒否で検証を飛ばしていることがある。shellToolCall の一覧が空なら、テストを回したという報告は嘘。Cursorの自己申告を鵜呑みにせず、ビルド・テスト・lintは自分でも回す。
+`is_error` が false でも、Shell拒否で検証を飛ばしていることがある。テストを回したと報告しているのに shellToolCall の一覧が空なら、報告と証跡が食い違っているので確認する(イベントのスキーマが変わって抽出できていないだけ、という可能性もある)。いずれにせよCursorの自己申告を鵜呑みにせず、ビルド・テスト・lintは自分でも回す。
 
 モデル名は `system` 行にしか出ない。`result` 行に `model` フィールドは無いので、そちらを見ると常に null になる。同じ `system` 行の `permissionMode` は `--auto-review` を付けても `default` のままなので当てにしない。
 
