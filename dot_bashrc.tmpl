@@ -14,6 +14,9 @@ case $- in
       *) return;;
 esac
 
+# HISTFILE は export しない。rc を読まないシェルへ継承されると、
+# そちらの既定値で履歴ファイルが切り詰められる。
+HISTFILE="${XDG_STATE_HOME:-$HOME/.local/state}/bash/history"
 HISTCONTROL=ignoreboth:erasedups
 HISTSIZE=100000
 HISTFILESIZE=200000
