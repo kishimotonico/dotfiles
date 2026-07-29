@@ -44,16 +44,50 @@ Cursorはこの会話の文脈を知らない前提で、自己完結したプ�
 ```bash
 out=$(mktemp /tmp/cursor-impl.XXXXXX.jsonl)
 err=$(mktemp /tmp/cursor-impl.XXXXXX.err)
-echo "output: $out / stderr: $err"
-cursor-agent -p --trust --auto-review --model composer-2.5 --output-format stream-json "<指示>" > "$out" 2>"$err" </dev/null
+echo "output: $out / stderr: $err / done: $out.done / pid: $out.pid"
+echo $$ > "$out.pid"
+timeout 1800 cursor-agent -p --trust --auto-review --model composer-2.5 --output-format stream-json "<指示>" > "$out" 2>"$err" </dev/null
+echo "exit=$?" > "$out.done"
 ```
+
+`$out.pid`(ラッパーシェルのPID)は生存確認用。`$out.done` を必ず書く(**完了フラグ**)。background Bash の完了通知は、セッションのターン境界やコンテキスト要約をまたぐと拾い損ねることがある。ファイルに落ちていれば後からいつでも確認できるので、通知に依存しない。`timeout 1800` は無応答のまま居座るのを防ぐ保険(タイムアウト時は `exit=124`)。
 
 **`--output-format json` は使わない**。全部終わってから単一オブジェクトを一度に吐くので、終わるまで出力が完全に無音になる。10分級の作業だとフリーズか作業中か区別が付かない。`stream-json` なら1行ずつ流れてくるうえ、最後の `result` 行に `json` と同じ内容がそのまま入るので、失うものがない。
 
 - 実行中はClaudeは working tree を変更しない(並行編集事故の防止。読み取りはOK)
-- 生存確認は `wc -l "$out"` か `tail -2 "$out"`。行が増えていれば動いている
-- 長時間(10分以上)行数が伸びていなければフリーズの可能性。TaskStop で止めて報告する
+- 生存確認は**プロセスの有無を先に見る**。行数の増加は傍証にしかならない(過去に伸びた行数を現在の進行と取り違えて、死んだ実行を「動いている」と誤認しやすい)
+
+    ```bash
+    kill -0 "$(cat "$out.pid")" 2>/dev/null && echo "生存" || echo "停止"
+    ls -l --time-style=+%H:%M "$out"        # 最終書込時刻
+    ```
+
+    `pgrep -f "cursor-agent"` のパターンマッチは使わない。確認コマンド自身の文字列や並行セッション、終了後も残留する node の `worker-server`(正常終了時も残る通常挙動)に誤マッチする
+- 生存しているのに最終書込が10分以上前ならフリーズの可能性。TaskStop で止めて報告する。入出力待ちのブロックが疑わしいときは `pstree -p "$(cat "$out.pid")"` で cursor-agent 本体のPIDを出し、`ps -o etime,time -p <PID>` を見る。経過時間(ELAPSED)が長いのにCPU時間(TIME)が `00:00:00` のままなら stdin 待ち(`</dev/null` の付け忘れが典型)
+- 停止しているのに `$out.done` が無ければ異常終了。「異常終了からの復旧」へ
 - `--stream-partial-output` はテキストをトークン単位に刻むだけで、行数が無駄に増えて読みにくい。人間が横で眺めるとき以外は付けない
+
+#### 完了判定
+
+**プロセスの終了とタスクの完了は別物**。両方を突き合わせる:
+
+```bash
+cat "$out.done" 2>/dev/null || echo "まだ実行中"                      # プロセスが終わったか
+jq -cR 'fromjson? // empty | select(.type=="result") | {is_error, subtype}' "$out"   # Cursorが完了報告したか
+```
+
+| `$out.done` | `result` 行 | 判断 |
+|---|---|---|
+| 無し | 無し | 実行中とは限らない。`kill -0` でプロセス生存を確認する。死んでいれば道連れの異常終了(親が死ぬと `$out.done` は書かれない) |
+| 有り | 有り | 正常完了。手順3へ |
+| 有り | 無し | **異常終了**。ストリームが途中で切れている(実測あり)。「異常終了からの復旧」へ |
+| 無し | 有り | 出力のフラッシュ待ち。数秒後に再確認 |
+
+元の通知を取りこぼしても拾えるよう、フラグの出現を待つ番犬を別の background Bash で張っておくと確実:
+
+```bash
+until [ -f "$out.done" ]; do sleep 10; done; echo "cursor finished: $(cat "$out.done")"
+```
 
 ### 3. 結果確認
 
@@ -86,12 +120,29 @@ jq -cR 'fromjson? // empty | select(.type=="result") | {is_error, subtype, sessi
 
 作業ログの全文は `~/.cursor/projects/<パスをスラグ化したもの>/agent-transcripts/<session_id>/<session_id>.jsonl` に残る。ツール呼び出し単位で追える。
 
+### 異常終了からの復旧
+
+呼び出し元の Claude Code プロセスが終了・再起動すると、background の cursor-agent は道連れで殺される(`result` 行が無く stderr も空になるのが典型)。Cursor 側の障害ではないので、作業内容を手で再構成せず **`--resume` で Cursor 自身の文脈ごと再開する**。session_id は最初の `system` 行から回収できる(system 行は実行開始直後に出るので、途中で死んでも必ず残っている。kill -9 で殺したセッションを resume して文脈保持まで実測確認済み):
+
+```bash
+sid=$(jq -rR 'fromjson? // empty | select(.type=="system") | .session_id' "$out" | head -1)
+git status --short && git diff --stat        # 作業ツリーの中間状態を確認
+```
+
+そのうえで手順4と同じ形で `--resume "$sid"` を実行する。続きの指示には**「これは中断による中間状態であり、設計の誤りではない」と明記**する。書かないと、型エラー等の壊れた状態を見て既存実装を作り直しにかかる。
+
+被害を小さくするため、1回の出力が数百KB規模になりそうな依頼は 実装 / テスト / 検証 などで複数ラウンドに分ける。中断で失うのは最後の区間だけで済む。
+
+(補足・未検証: `setsid` で切り離せば親の終了を生き延びる可能性があるが、harness の完了通知が来なくなり自前ポーリングが要るトレードオフがある。上記で足りない場合の次の手)
+
 ### 4. 反復(必要な場合)
 
 修正を差し戻すときは、手順3で取ったセッションIDを明示して継続する:
 
 ```bash
-cursor-agent -p --resume <session_id> --trust --auto-review --model composer-2.5 --output-format stream-json "<修正指示>" > "$out2" 2>"$err2" </dev/null
+echo $$ > "$out2.pid"
+timeout 1800 cursor-agent -p --resume <session_id> --trust --auto-review --model composer-2.5 --output-format stream-json "<修正指示>" > "$out2" 2>"$err2" </dev/null
+echo "exit=$?" > "$out2.done"
 ```
 
 `--continue`(直前セッションの継続)は使用禁止。並行で別セッションが動いていると無関係なセッションを掴むため、必ずIDを明示する。継続時も `session_id` は同じ値が返る。
