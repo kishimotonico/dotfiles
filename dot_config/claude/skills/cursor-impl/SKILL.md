@@ -50,7 +50,7 @@ timeout 1800 cursor-agent -p --trust --auto-review --model composer-2.5 --output
 echo "exit=$?" > "$out.done"
 ```
 
-- コマンド文字列の中で cursor-agent を `&` で背景化しない。ラッパーシェルが即終了し、子の cursor-agent が道連れになる(実運用で確認済み)
+- コマンド文字列の中で cursor-agent を `&` で背景化しない。ラッパーシェルが即終了し、子の cursor-agent が道連れになる
 - `$out.done` は完了フラグ、`$out.pid` は生存確認用。background の完了通知はターン境界やコンテキスト要約をまたぐと拾い損ねるので、ファイルだけで判定できるようにしておく
 - `timeout 1800` は無応答のまま居座るのを防ぐ保険(タイムアウト時は `exit=124`)
 - 起動を確認したら `head -1 "$out"` で `session_id` を控える。`$out` のパスを失っても(要約・/tmp掃除)復旧できる
@@ -72,7 +72,7 @@ ls -l --time-style=+%H:%M "$out"        # 最終書込時刻
 | 状態 | 判断 |
 |---|---|
 | done有り + result有り | 正常完了。手順3へ |
-| done有り + result無し | 異常終了。ストリームが途中で切れている(実測あり)。「異常終了からの復旧」へ |
+| done有り + result無し | 異常終了。ストリームが途中で切れている。「異常終了からの復旧」へ |
 | done無し + プロセス停止 | 道連れの異常終了(親が死ぬと done は書かれない)。同じく復旧へ |
 | done無し + プロセス生存 | 実行中。最終書込が10分以上前ならフリーズの可能性、TaskStop で止めて報告 |
 | done無し + result有り | 出力のフラッシュ待ち。数秒後に再確認 |
@@ -118,7 +118,7 @@ jq -cR 'fromjson? // empty | select(.type=="result") | {is_error, subtype, sessi
 
 ### 異常終了からの復旧
 
-呼び出し元の Claude Code プロセスが終了・再起動すると、background の cursor-agent は道連れで殺される(result 行なし・stderr 空が典型)。Cursor 側の障害ではないので、作業内容を手で再構成せず `--resume` で Cursor 自身の文脈ごと再開する(kill -9 したセッションでも文脈保持を実測確認済み):
+呼び出し元の Claude Code プロセスが終了・再起動すると、background の cursor-agent は道連れで殺される(result 行なし・stderr 空が典型)。Cursor 側の障害ではないので、作業内容を手で再構成せず `--resume` で Cursor 自身の文脈ごと再開する:
 
 ```bash
 sid=$(jq -rR 'fromjson? // empty | select(.type=="system") | .session_id' "$out" | head -1)   # system行は最初に出るので途中死でも残る
