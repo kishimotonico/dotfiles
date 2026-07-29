@@ -31,5 +31,7 @@ herdr-msg reply <address> '<返事を1行で>'
 - agent名を渡すと同一タブ > 同一cwdの順で自動選択される。決められずexit 2になったら、候補のterminal IDを指定して再実行する
 - 相手がworkingでも送信できる
 - 送信後はポーリングも `pane read` もせず、ターンを終える
+- `herdr-msg` はsubmit確認に失敗するとエラーで終了する。そのときは相手paneを `herdr pane read` で見て、コンポーザーに未送信テキストが残っていれば `herdr pane send-keys <pane_id> enter` で確定してからターンを終える
+- 相手がworkingのときはsubmit確認ができないため、返事が長時間来なければ同じ手順で確認する
 - メッセージは1行にする。複雑な引用や長文はファイル経由にする
 - `herdr-msg` はherdrが検出済みのagent専用
