@@ -1,2 +1,84 @@
 #!/usr/bin/env bash
-iconv -t UTF-16LE | clip.exe
+# 標準入力、または引数で渡したファイルの内容をクリップボードへコピーする。
+#   - ローカルのWSL: clip.exe に UTF-16LE で渡す（文字化け回避）
+#   - SSH接続越し / clip.exe が無い環境: OSC52 で接続元のクリップボードへ
+#
+# 使い方:
+#   echo hello | clip
+#   clip file.txt [file2.txt ...]
+#   cat file.txt | clip -      # - は標準入力
+set -uo pipefail
+
+usage() {
+	cat <<'EOS'
+Usage: clip [FILE...]
+
+引数なし、または - を指定した場合は標準入力を読み取る。
+複数ファイルを指定した場合は結合してコピーする。
+EOS
+}
+
+use_osc52() {
+	[ -n "${SSH_CONNECTION:-}" ] && return 0
+	[ -n "${SSH_TTY:-}" ] && return 0
+	command -v clip.exe >/dev/null 2>&1 || return 0
+	return 1
+}
+
+copy_stdin() {
+	if use_osc52; then
+		if [ -n "${TMUX:-}" ]; then
+			# tmux に任せると set-clipboard on の設定で OSC52 を上位端末へ中継してくれる
+			exec tmux load-buffer -w -
+		fi
+
+		if : >/dev/tty 2>/dev/null; then
+			out=/dev/tty
+		else
+			# tty が掴めない場合は端末に届くことを期待して stderr へ流す
+			out=/dev/stderr
+		fi
+
+		# OSC52 は端末側に長さ制限（数十KB程度）があるため、大きすぎる入力は警告する
+		payload=$(base64 | tr -d '\n')
+		if [ "${#payload}" -gt 74994 ]; then
+			printf 'clip: 入力が大きすぎるため OSC52 で送信できません (%d bytes)\n' "${#payload}" >&2
+			return 1
+		fi
+		printf '\033]52;c;%s\a' "$payload" >"$out"
+		return 0
+	fi
+
+	iconv -t UTF-16LE | clip.exe
+}
+
+case "${1:-}" in
+-h | --help)
+	usage
+	exit 0
+	;;
+--)
+	shift
+	;;
+esac
+
+if [ "$#" -eq 0 ]; then
+	copy_stdin
+	exit $?
+fi
+
+# 事前に読めることを確認しておく（途中で失敗して中途半端にコピーされるのを防ぐ）
+for f in "$@"; do
+	[ "$f" = "-" ] && continue
+	if [ -d "$f" ]; then
+		printf 'clip: %s はディレクトリです\n' "$f" >&2
+		exit 1
+	fi
+	if [ ! -r "$f" ]; then
+		printf 'clip: %s を読み込めません\n' "$f" >&2
+		exit 1
+	fi
+done
+
+cat -- "$@" | copy_stdin
+exit $?
