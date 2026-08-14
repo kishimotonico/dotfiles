@@ -69,7 +69,6 @@ echo "exit=$?" > "$out.done"
 - `timeout 1800` は無応答のまま居座るのを防ぐ保険(タイムアウト時は `exit=124`)
 - 起動を確認したら `head -1 "$out"` で `session_id` を控える。`$out` のパスを失っても(要約・/tmp掃除)復旧できる
 - `--output-format json` は使わない。終了まで完全に無音で、フリーズと作業中の区別が付かない。`stream-json` なら1行ずつ流れ、最後の `result` 行に `json` と同じ内容が入る
-- `--stream-partial-output` は付けない。トークン単位に刻まれて読みにくいだけ(人間が横で眺めるときは可)
 - 実行中はClaudeは working tree を変更しない(並行編集事故の防止。読み取りはOK)
 
 #### 状態確認
@@ -136,14 +135,12 @@ jq -cR 'fromjson? // empty | select(.type=="result") | {is_error, subtype, sessi
 
 ```bash
 sid=$(jq -rR 'fromjson? // empty | select(.type=="system") | .session_id' "$out" | head -1)   # system行は最初に出るので途中死でも残る
-git status --short && git diff --stat        # 作業ツリーの中間状態を確認
+git status --short --untracked-files=all && git diff --stat   # 作業ツリーの中間状態を確認
 ```
 
 そのうえで手順4と同じ形で `--resume "$sid"` を実行する。続きの指示には「これは中断による中間状態であり、設計の誤りではない」と明記する。書かないと、型エラー等の壊れた状態を見て既存実装を作り直しにかかる。
 
 出力が数百KB規模になりそうな依頼は、実装 / テスト / 検証 などで複数ラウンドに分ける。中断で失うのが最後の区間だけで済む。
-
-(未検証: `setsid` で切り離せば親の終了を生き延びる可能性があるが、完了通知が来なくなり自前ポーリングが要る。上記で足りない場合の次の手)
 
 ### 4. 反復(必要な場合)
 
@@ -161,30 +158,8 @@ echo "exit=$?" > "$out2.done"
 
 ### 5. 報告
 
-- 何が変わったか(`file:line` 参照付き)、自分のレビュー所見、テスト結果を日本語で報告
-- コミットはユーザーの指示があるまでしない
+何が変わったか(`file:line` 参照付き)、自分のレビュー所見、テスト結果を報告する。
 
 ## ユーザーが進捗を見たい場合
 
-「観戦したい」「ペインで見たい」と言われたら、background Bash の代わりに herdr のペインで実行する。`HERDR_ENV` が `1` でなければ herdr 管理下にないので、その旨を伝えて通常の background Bash で実行する。
-
-```bash
-out=$(mktemp /tmp/cursor-impl.XXXXXX.log)
-self=$(herdr pane list | jq -r --arg cwd "$PWD" '[.result.panes[] | select(.agent=="claude" and .cwd==$cwd)][0].pane_id')
-pane=$(herdr pane split "$self" --direction down --no-focus | jq -r '.result.pane.pane_id')
-herdr pane run "$pane" "cursor-agent -p --trust --auto-review --model composer-2.5 '<指示>' 2>&1 | tee $out"'; echo "CURSOR""_DONE:$?"'
-herdr wait output "$pane" --match 'CURSOR_DONE:' --timeout 1800000
-cat "$out"
-```
-
-- ペインで見せるときは `--output-format` を外してテキスト出力にする。この場合セッションIDは出力に出ないので、反復が必要なら transcript のディレクトリ名から拾う
-
-    ```bash
-    basename "$(ls -1td ~/.cursor/projects/*/agent-transcripts/*/ | head -1)"
-    ```
-
-    最終更新が最新のものを採るだけなので、並行して別セッションを走らせているときは当てにならない
-
-- マーカーを `"CURSOR""_DONE"` と分割するのは、入力エコー行への誤マッチ防止(出力の `CURSOR_DONE:<exit code>` だけがマッチする)
-- タイムアウト時は `herdr pane read "$pane" --source recent-unwrapped --lines 50` で画面を確認して状況を報告する
-- 報告が終わったら `herdr pane close "$pane"` で後始末する(ユーザーが見終わったことを確認してから)
+「観戦したい」「ペインで見たい」と言われたら、background Bash の代わりに herdr のペインで実行する。手順は [references/herdr-watch.md](references/herdr-watch.md) を読む。
