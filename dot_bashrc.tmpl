@@ -108,12 +108,6 @@ eval "$(starship init bash)"
 # zoxide
 eval "$(zoxide init bash)"
 
-# tirith
-# 安全なコマンドの "tirith: no issues" は表示しない。
-# 警告・検出結果・エラーは引き続き表示される。
-export TIRITH_QUIET=1
-eval "$(tirith init --shell bash)"
-
 # rye (廃止予定)
 if [ -f "$HOME/.rye/env" ]; then
   source "$HOME/.rye/env"
@@ -144,3 +138,11 @@ if [ -f "$CHEZMOI_SCRIPT_DIR/set_aws_saml_login.sh" ]; then
     alias awssaml=set_aws_saml_login
 fi
 {{ end -}}
+
+# tirith
+# 安全なコマンドの "tirith: no issues" は表示しない。
+# 警告・検出結果・エラーは引き続き表示される。
+export TIRITH_QUIET=1
+# ここより後の行はすべて DEBUG trap 経由で tirith check の対象になり、
+# 1行ごとにプロセスが起動して起動時間が伸びるため、必ず .bashrc の末尾に置くこと。
+eval "$(tirith init --shell bash)"
