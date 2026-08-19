@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# herdr-pick — fzfでherdrペインを選びterminal_idを出力する
+#
+# usage:
+#   herdr-pick              対話的にペインを選びterminal_idを1行出力
+#   herdr-pick --pane       pane_idを出力
+#   herdr-pick -h, --help   このヘルプを表示
+set -euo pipefail
+
+usage() {
+    sed -n '2,/^set -euo pipefail/p' "$0" | sed 's/^# \{0,1\}//; $d'
+}
+
+die() {
+    echo "herdr-pick: $*" >&2
+    exit 1
+}
+
+output_field=8
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --pane)
+            output_field=3
+            shift
+            ;;
+        -h|--help|help)
+            usage
+            exit 0
+            ;;
+        *)
+            die "unknown option: $1 (try --help)"
+            ;;
+    esac
+done
+
+command -v fzf >/dev/null 2>&1 || die "fzf not found"
+command -v jq >/dev/null 2>&1 || die "jq not found"
+
+pane_json=$(herdr pane list 2>&1) || {
+    message=$(jq -r '.error.message // empty' <<<"$pane_json" 2>/dev/null || true)
+    die "${message:-failed to list panes (is herdr running?)}"
+}
+
+tab_json=$(herdr tab list 2>&1) || {
+    message=$(jq -r '.error.message // empty' <<<"$tab_json" 2>/dev/null || true)
+    die "${message:-failed to list tabs (is herdr running?)}"
+}
+
+lines=$(
+    jq -rn --argjson panes "$(jq -c '.result.panes' <<<"$pane_json")" \
+        --argjson tabs "$(jq -c '.result.tabs' <<<"$tab_json")" '
+        ($tabs | map({key: .tab_id, value: .label}) | from_entries) as $tab_map |
+        $panes[] |
+        [
+            ($tab_map[.tab_id] // .tab_id),
+            .workspace_id,
+            .pane_id,
+            (.agent // "-"),
+            .agent_status,
+            ((.foreground_cwd // .cwd) | split("/") | last),
+            (if (.terminal_title_stripped // "") == "" then "-" else .terminal_title_stripped end),
+            .terminal_id
+        ] | @tsv
+    '
+)
+
+[ -n "$lines" ] || die "no panes found"
+
+selection=$(
+    printf '%s\n' "$lines" |
+        fzf --delimiter=$'\t' \
+            --with-nth=1..-2 \
+            --header='tab  workspace  pane  agent  status  cwd  title' \
+            --preview='herdr pane read --source visible {3}' \
+            --preview-window=right:60%:wrap
+) || {
+    code=$?
+    if [ "$code" -eq 1 ] || [ "$code" -eq 130 ]; then
+        exit 130
+    fi
+    exit "$code"
+}
+
+[ -n "$selection" ] || exit 130
+
+picked_pane=$(printf '%s\n' "$selection" | awk -F'\t' '{print $3}')
+picked_terminal=$(printf '%s\n' "$selection" | awk -F'\t' '{print $NF}')
+
+[ -n "$picked_terminal" ] || die "failed to resolve selection"
+
+case "$output_field" in
+    3) printf '%s\n' "$picked_pane" ;;
+    *) printf '%s\n' "$picked_terminal" ;;
+esac

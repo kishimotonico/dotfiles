@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# sleep-until: 指定した絶対時刻までスリープする
+#
+# 時刻だけを指定した場合、それが過去なら翌日の同時刻まで待つ。
+# 日付つきで指定した時刻が過去の場合はエラー。
+#
+# 使い方:
+#   sleep-until 5:12
+#   sleep-until 23:30:15
+#   sleep-until "2026-08-01 05:12"
+#   sleep-until tomorrow 9:00
+#   sleep-until 5:12 && some-command
+
+set -euo pipefail
+
+die() { printf 'sleep-until: %s\n' "$*" >&2; exit 1; }
+
+(( $# > 0 )) || die "時刻を指定してください (e.g: sleep-until 5:12)"
+
+spec="$*"
+now=$(date +%s)
+target=$(date -d "$spec" +%s 2>/dev/null) || die "時刻を解釈できません: $spec"
+
+if (( target <= now )); then
+  # 時刻のみの指定 (HH:MM など) なら翌日に繰り越す
+  if [[ "$spec" =~ ^[0-9]{1,2}:[0-9]{2}(:[0-9]{2})?([[:space:]]*(am|pm|AM|PM))?$ ]]; then
+    target=$(date -d "tomorrow $spec" +%s)
+  else
+    die "指定時刻が過去です: $(date -d "@$target" '+%Y-%m-%d %H:%M:%S')"
+  fi
+fi
+
+secs=$(( target - now ))
+printf 'sleep-until: %s まで待機 (%dh%02dm%02ds)\n' \
+  "$(date -d "@$target" '+%Y-%m-%d %H:%M:%S')" \
+  $(( secs / 3600 )) $(( secs % 3600 / 60 )) $(( secs % 60 )) >&2
+
+sleep "$secs"
