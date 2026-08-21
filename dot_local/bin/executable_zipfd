@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# srczip: 指定ディレクトリのソースコードだけを zip にまとめる
+# zipfd: 指定ディレクトリのソースコードだけを zip にまとめる
 #
 # VCS から除外されているファイル(.gitignore 等)は fd と同じルールで除外する。
 #
 # 使い方:
-#   srczip [options] [DIR]
+#   zipfd [options] [DIR]
 #
 #   DIR              対象ディレクトリ(省略時はカレントディレクトリ)
 #   -o, --output F   出力先 zip ファイル(省略時は <対象ディレクトリ名>.zip)
@@ -14,9 +14,11 @@
 
 set -euo pipefail
 
+prog=${0##*/}
+
 usage() {
-	cat <<'EOS'
-Usage: srczip [options] [DIR]
+	cat <<EOS
+Usage: ${prog} [options] [DIR]
 
   DIR              対象ディレクトリ(省略時はカレントディレクトリ)
   -o, --output F   出力先 zip ファイル。省略時は <対象ディレクトリ名>.zip を
@@ -28,7 +30,7 @@ EOS
 }
 
 die() {
-	printf 'srczip: %s\n' "$*" >&2
+	printf '%s: %s\n' "$prog" "$*" >&2
 	exit 1
 }
 
@@ -175,4 +177,4 @@ fi
 )
 
 size=$(stat -c '%s' -- "$output_abs")
-printf 'srczip: %d ファイル → %s (%d bytes)\n' "${#rel_paths[@]}" "$output_abs" "$size" >&2
+printf '%s: %d ファイル → %s (%d bytes)\n' "$prog" "${#rel_paths[@]}" "$output_abs" "$size" >&2
