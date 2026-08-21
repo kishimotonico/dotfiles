@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# srczip: 指定ディレクトリのソースコードだけを zip にまとめる
+#
+# VCS から除外されているファイル(.gitignore 等)は fd と同じルールで除外する。
+#
+# 使い方:
+#   srczip [options] [DIR]
+#
+#   DIR              対象ディレクトリ(省略時はカレントディレクトリ)
+#   -o, --output F   出力先 zip ファイル(省略時は <対象ディレクトリ名>.zip)
+#   -f, --force      出力先が既に存在する場合に上書きする
+#   -l, --list       zip を作らず、含まれるファイル一覧を表示する
+#   -h, --help       usage を表示して終了
+
+set -euo pipefail
+
+usage() {
+	cat <<'EOS'
+Usage: srczip [options] [DIR]
+
+  DIR              対象ディレクトリ(省略時はカレントディレクトリ)
+  -o, --output F   出力先 zip ファイル。省略時は <対象ディレクトリ名>.zip を
+                   カレントディレクトリに作る
+  -f, --force      出力先が既に存在する場合に上書きする(デフォルトはエラー)
+  -l, --list       zip を作らず、含まれるファイル一覧を標準出力に出す
+  -h, --help       この usage を表示して終了
+EOS
+}
+
+die() {
+	printf 'srczip: %s\n' "$*" >&2
+	exit 1
+}
+
+require_command() {
+	local name=$1
+	command -v "$name" >/dev/null 2>&1 || die "${name} が見つかりません"
+}
+
+resolve_abs() {
+	local path=$1
+	if [[ "$path" != /* ]]; then
+		path=$PWD/$path
+	fi
+	local dir base
+	dir=$(dirname -- "$path")
+	base=$(basename -- "$path")
+	# 親ディレクトリが未作成でも cd 失敗で空にならないよう、存在するときだけ正規化する
+	if [[ -d "$dir" ]]; then
+		dir=$(cd -- "$dir" && pwd -P)
+	fi
+	printf '%s/%s\n' "$dir" "$base"
+}
+
+is_subpath() {
+	local parent=$1 child=$2
+	[[ "$child" == "$parent" || "$child" == "$parent"/* ]]
+}
+
+force=0
+list=0
+output=
+target_dir=
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	-h | --help)
+		usage
+		exit 0
+		;;
+	-f | --force)
+		force=1
+		shift
+		;;
+	-l | --list)
+		list=1
+		shift
+		;;
+	-o | --output)
+		[[ $# -ge 2 ]] || die "-o / --output には出力先を指定してください"
+		output=$2
+		shift 2
+		;;
+	--)
+		shift
+		break
+		;;
+	-*)
+		die "不明なオプション: $1"
+		;;
+	*)
+		[[ -z "$target_dir" ]] || die "DIR は1つだけ指定できます"
+		target_dir=$1
+		shift
+		;;
+	esac
+done
+
+# `--` でオプション解析を打ち切った場合、残りの位置引数はここで拾う
+if [[ $# -gt 0 ]]; then
+	[[ -z "$target_dir" ]] || die "DIR は1つだけ指定できます"
+	target_dir=$1
+	shift
+	(($# == 0)) || die "DIR は1つだけ指定できます"
+fi
+
+target_dir=${target_dir:-.}
+
+require_command fd
+require_command zip
+
+[[ -d "$target_dir" ]] || die "ディレクトリではありません: $target_dir"
+
+target_abs=$(cd -- "$target_dir" && pwd -P)
+target_name=$(basename -- "$target_abs")
+
+if [[ -z "$output" ]]; then
+	output=$PWD/${target_name}.zip
+fi
+output_abs=$(resolve_abs "$output")
+
+# --list は zip を書かないので、出力先の存在チェックは不要
+if [[ "$list" -eq 0 && -e "$output_abs" && "$force" -eq 0 ]]; then
+	die "出力先が既に存在します: $output_abs (--force で上書き)"
+fi
+
+output_rel=
+if is_subpath "$target_abs" "$output_abs"; then
+	output_rel=${output_abs#"$target_abs"/}
+	[[ -n "$output_rel" && "$output_rel" != "$output_abs" ]] || die "出力先 zip の除外パスを決定できません: $output_abs"
+fi
+
+fd_args=(
+	--type f
+	--hidden # .github/ や .editorconfig などドットファイル/隠しディレクトリも含める
+	--no-require-git # git リポジトリでなくても .gitignore / .ignore を尊重する
+	--exclude .git
+)
+
+mapfile -d '' -t files < <(
+	cd -- "$target_abs"
+	fd "${fd_args[@]}" --print0 .
+)
+
+rel_paths=()
+for file in "${files[@]}"; do
+	[[ "$file" == *$'\n'* ]] && die "改行を含むファイル名はサポートしていません: ${file//$'\n'/\\n}"
+	rel=${file#./}
+	[[ -n "$output_rel" && "$rel" == "$output_rel" ]] && continue
+	rel_paths+=("$rel")
+done
+
+if ((${#rel_paths[@]} == 0)); then
+	die "zip に含めるファイルがありません: $target_abs"
+fi
+
+if [[ "$list" -eq 1 ]]; then
+	printf '%s\n' "${rel_paths[@]}"
+	exit 0
+fi
+
+output_parent=$(dirname -- "$output_abs")
+mkdir -p -- "$output_parent" || die "出力先の親ディレクトリを作成できません: $output_parent"
+
+# zip は既存アーカイブがあると更新モードになり古いエントリが残るため、上書き時は削除する
+if [[ -e "$output_abs" ]]; then
+	rm -f -- "$output_abs"
+fi
+
+{
+	printf '%s\n' "${rel_paths[@]}"
+} | (
+	cd -- "$target_abs"
+	zip -q -X "$output_abs" -@
+)
+
+size=$(stat -c '%s' -- "$output_abs")
+printf 'srczip: %d ファイル → %s (%d bytes)\n' "${#rel_paths[@]}" "$output_abs" "$size" >&2
