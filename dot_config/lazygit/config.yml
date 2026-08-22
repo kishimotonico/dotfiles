@@ -1,0 +1,3 @@
+os:
+  # WSL/SSH環境では xsel などが無いため、自前の clip コマンドへ流す
+  copyToClipboardCmd: "printf '%s' {{text}} | clip"
