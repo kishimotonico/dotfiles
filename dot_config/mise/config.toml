@@ -46,7 +46,6 @@ rust = "latest"
 herdr = "latest"
 hunk = "latest"
 tirith = "latest"
-opencode = "latest"
 "github:can1357/oh-my-pi" = "latest"
 
 [tools."npm:@openai/codex"]
