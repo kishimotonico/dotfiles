@@ -12,12 +12,20 @@
 #       --until <TIME>                  この時刻を過ぎたら終了
 #       --no-enter                      テキストだけ送り Enter を押さない
 #   -f, --file <FILE>                   本文をファイルから読む (- は標準入力)
+#   -i, --interactive                   対話ウィザードで宛先・本文・日時を尋ねる
 #   -n, --dry-run                       送らずに宛先・予定時刻・本文を表示
 #   -h, --help                          このヘルプを表示
 #
 # 本文は引数、-f FILE、標準入力(- またはパイプ)のいずれかで指定する。
 # 本文を省略した場合は Enter のみを送る (--no-enter 指定時は何も送らない)。
 # --at も --every も無ければ即時に1回送信する。
+#
+# 対話ウィザード (-i/--interactive 指定時、または -t 省略かつ本文/--at/--every/
+# --times/--until のいずれも指定されておらず標準入力・標準エラーが端末のとき自動起動):
+# 宛先(未指定なら herdr-pick で選択)、本文、日時を未指定の項目だけ順に尋ね、
+# 最後に内容を確認してから送信する。本文入力で ":e" と打つと $EDITOR (既定 vi) で
+# 複数行の本文を書ける。日時は1行で "14:30 every 30m"、"every 1h x5"、
+# "9:00 every 30m until 18:00" のように指定する (空なら即時に1回)。
 set -euo pipefail
 
 usage() {
@@ -227,6 +235,189 @@ body_preview() {
     fi
 }
 
+# terminal_id から「workspace / tab / agent / title」の人間向け表示を組み立てる
+# agent が無いペイン(シェル)は agent 要素を省いて「workspace / tab / title」にする
+human_target_label() {
+    local terminal_id="$1" pane_json pane_row tab_id workspace_id agent title
+    local tab_json ws_json tab_label ws_label
+
+    pane_json=$(herdr pane list 2>&1) || return 1
+    pane_row=$(jq -c --arg t "$terminal_id" '.result.panes[]? | select(.terminal_id == $t)' <<<"$pane_json" 2>/dev/null) || return 1
+    [ -n "$pane_row" ] || return 1
+
+    tab_id=$(jq -r '.tab_id' <<<"$pane_row")
+    workspace_id=$(jq -r '.workspace_id' <<<"$pane_row")
+    agent=$(jq -r '.agent // ""' <<<"$pane_row")
+    title=$(jq -r '
+        if (.terminal_title_stripped // "") != "" then .terminal_title_stripped
+        else ((.foreground_cwd // .cwd) | split("/") | last) end
+    ' <<<"$pane_row")
+
+    tab_json=$(herdr tab list 2>&1) || tab_json=""
+    ws_json=$(herdr workspace list 2>&1) || ws_json=""
+    tab_label=$(jq -r --arg t "$tab_id" '.result.tabs[]? | select(.tab_id == $t) | .label' <<<"$tab_json" 2>/dev/null || true)
+    ws_label=$(jq -r --arg w "$workspace_id" '.result.workspaces[]? | select(.workspace_id == $w) | .label' <<<"$ws_json" 2>/dev/null || true)
+
+    if [ -n "$agent" ]; then
+        printf '%s / %s / %s / %s\n' "${ws_label:-$workspace_id}" "${tab_label:-$tab_id}" "$agent" "$title"
+    else
+        printf '%s / %s / %s\n' "${ws_label:-$workspace_id}" "${tab_label:-$tab_id}" "$title"
+    fi
+}
+
+# ウィザードの日時入力 (1行) をパースする。
+# "[TIME] [every DUR] [until TIME] [xN]" を素朴に切り出す。
+# 成功時は WIZARD_AT/WIZARD_EVERY/WIZARD_EVERY_SECS/WIZARD_TIMES/WIZARD_UNTIL/
+# WIZARD_UNTIL_TS を設定し 0 を返す。失敗時は WIZARD_ERR にメッセージを入れ 1 を返す。
+parse_datetime_line() {
+    local rest="$1" out
+    WIZARD_AT=""
+    WIZARD_EVERY=""
+    WIZARD_EVERY_SECS=""
+    WIZARD_TIMES=""
+    WIZARD_UNTIL=""
+    WIZARD_UNTIL_TS=""
+    WIZARD_ERR=""
+
+    rest="${rest#"${rest%%[![:space:]]*}"}"
+    rest="${rest%"${rest##*[![:space:]]}"}"
+    [ -n "$rest" ] || return 0
+
+    if [[ "$rest" =~ ^(.*[[:space:]])x([0-9]+)[[:space:]]*$ ]]; then
+        WIZARD_TIMES="${BASH_REMATCH[2]}"
+        rest="${BASH_REMATCH[1]}"
+    elif [[ "$rest" =~ ^x([0-9]+)$ ]]; then
+        WIZARD_TIMES="${BASH_REMATCH[1]}"
+        rest=""
+    fi
+
+    if [[ "$rest" =~ ^(.*)[[:space:]]until[[:space:]]+(.+)$ ]]; then
+        WIZARD_UNTIL="${BASH_REMATCH[2]}"
+        rest="${BASH_REMATCH[1]}"
+    elif [[ "$rest" =~ ^until[[:space:]]+(.+)$ ]]; then
+        WIZARD_UNTIL="${BASH_REMATCH[1]}"
+        rest=""
+    fi
+
+    if [[ "$rest" =~ ^(.*)[[:space:]]every[[:space:]]+([^[:space:]]+)[[:space:]]*$ ]]; then
+        WIZARD_EVERY="${BASH_REMATCH[2]}"
+        rest="${BASH_REMATCH[1]}"
+    elif [[ "$rest" =~ ^every[[:space:]]+([^[:space:]]+)[[:space:]]*$ ]]; then
+        WIZARD_EVERY="${BASH_REMATCH[1]}"
+        rest=""
+    fi
+
+    rest="${rest#"${rest%%[![:space:]]*}"}"
+    rest="${rest%"${rest##*[![:space:]]}"}"
+    WIZARD_AT="$rest"
+
+    if [ -n "$WIZARD_TIMES" ] && [ "$WIZARD_TIMES" -le 0 ]; then
+        WIZARD_ERR="回数(x<N>)は1以上の整数で指定してください"
+        return 1
+    fi
+
+    if [ -n "$WIZARD_AT" ]; then
+        out=$(parse_time "$WIZARD_AT" 2>&1) || { WIZARD_ERR="$out"; return 1; }
+    fi
+
+    if [ -n "$WIZARD_EVERY" ]; then
+        out=$(parse_duration "$WIZARD_EVERY" 2>&1) || { WIZARD_ERR="$out"; return 1; }
+        WIZARD_EVERY_SECS="$out"
+    fi
+
+    if [ -n "$WIZARD_UNTIL" ]; then
+        out=$(parse_time "$WIZARD_UNTIL" 2>&1) || { WIZARD_ERR="$out"; return 1; }
+        WIZARD_UNTIL_TS="$out"
+    fi
+
+    return 0
+}
+
+# 本文が未指定のときに1回だけ尋ねる。":e" で $EDITOR による複数行入力に切り替える
+ask_body() {
+    local input tmp
+    printf '本文 (空Enter=Enterのみ送信、":e"=エディタで複数行入力): ' >&2
+    IFS= read -e -r input < /dev/tty || true
+    if [ "$input" = ":e" ]; then
+        tmp=$(mktemp)
+        "${EDITOR:-vi}" "$tmp" < /dev/tty > /dev/tty 2>&1 || true
+        body=$(<"$tmp")
+        rm -f "$tmp"
+    else
+        body="$input"
+    fi
+}
+
+# 日時が未指定のときに1行で尋ね、解釈できるまで再入力させる
+ask_datetime() {
+    local line
+    while :; do
+        printf '日時 (空=即時1回。例: "14:30 every 30m" / "every 1h x5" / "9:00 every 30m until 18:00"): ' >&2
+        IFS= read -e -r line < /dev/tty || true
+        if parse_datetime_line "$line"; then
+            at_spec="$WIZARD_AT"
+            every_spec="$WIZARD_EVERY"
+            every_secs="$WIZARD_EVERY_SECS"
+            times="$WIZARD_TIMES"
+            until_spec="$WIZARD_UNTIL"
+            until_ts="$WIZARD_UNTIL_TS"
+            return
+        fi
+        printf 'herdr-at: %s\n' "$WIZARD_ERR" >&2
+    done
+}
+
+# 送信内容を表示し、実行するか最終確認する。n なら exit 130
+wizard_confirm() {
+    local t="$next_target" now2 i=0 max=5 ans
+
+    printf '\n----- 送信内容の確認 -----\n' >&2
+    printf '宛先: %s\n' "${target_label:-$terminal_id}" >&2
+    printf '本文:\n' >&2
+    body_preview "$body" >&2
+    printf '予定時刻:\n' >&2
+    while :; do
+        if [ -n "$until_ts" ] && [ "$t" -gt "$until_ts" ]; then
+            break
+        fi
+        if [ "$i" -ge "$max" ]; then
+            printf '  ...(以降省略)\n' >&2
+            break
+        fi
+        printf '  - %s\n' "$(format_ts "$t")" >&2
+        i=$((i + 1))
+        if [ -n "$times" ] && [ "$i" -ge "$times" ]; then
+            break
+        fi
+        [ -n "$every_secs" ] || break
+        t=$((t + every_secs))
+        now2=$(date +%s)
+        while (( t <= now2 )); do
+            t=$((t + every_secs))
+        done
+    done
+    if [ -n "$every_secs" ]; then
+        printf '繰り返し: %s おきに' "$every_spec" >&2
+        if [ -n "$times" ]; then
+            printf '%s 回\n' "$times" >&2
+        else
+            printf '無制限\n' >&2
+        fi
+        [ -z "$until_ts" ] || printf '  終了条件: %s まで\n' "$(format_ts "$until_ts")" >&2
+    else
+        printf '繰り返し: なし\n' >&2
+    fi
+
+    printf '実行しますか? [Y/n] ' >&2
+    IFS= read -e -r ans < /dev/tty || true
+    case "$ans" in
+        [nN]*)
+            printf 'herdr-at: キャンセルしました\n' >&2
+            exit 130
+            ;;
+    esac
+}
+
 target=""
 at_spec=""
 every_spec=""
@@ -236,8 +427,10 @@ until_spec=""
 no_enter=0
 file=""
 dry_run=0
+interactive_opt=0
 body=""
 body_from_args=0
+body_specified=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -283,6 +476,10 @@ while [ $# -gt 0 ]; do
             dry_run=1
             shift
             ;;
+        -i|--interactive)
+            interactive_opt=1
+            shift
+            ;;
         -h|--help|help)
             usage
             exit 0
@@ -304,6 +501,7 @@ done
 
 if [ "$body_from_args" -eq 1 ]; then
     body="$*"
+    body_specified=1
 elif [ -n "$file" ]; then
     if [ "$file" = "-" ]; then
         body=$(cat)
@@ -311,10 +509,24 @@ elif [ -n "$file" ]; then
         [ -f "$file" ] || die "file not found: $file"
         body=$(<"$file")
     fi
+    body_specified=1
 elif [ -p /dev/stdin ]; then
     # パイプで渡されたときだけ読む。単なる非tty (バックグラウンド実行や
     # < /dev/null) で本文入力待ちにならないようにする
     body=$(cat)
+    body_specified=1
+fi
+
+# 対話ウィザードを起動するか判定する。-i 指定時は常に起動。
+# それ以外は、宛先・本文・日時関連オプションが一切指定されておらず
+# 標準入力・標準エラーが端末に接続されているときのみ自動起動する
+interactive=0
+if [ "$interactive_opt" -eq 1 ]; then
+    interactive=1
+elif [ -z "$target" ] && [ "$body_specified" -eq 0 ] &&
+    [ -z "$at_spec" ] && [ -z "$every_spec" ] && [ -z "$times" ] && [ -z "$until_spec" ] &&
+    [ -t 0 ] && [ -t 2 ]; then
+    interactive=1
 fi
 
 if [ -n "$times" ]; then
@@ -333,6 +545,14 @@ if [ -z "$target" ]; then
     target=$("$pick_cmd") || exit $?
 fi
 terminal_id=$(normalize_target "$target")
+target_label=$(human_target_label "$terminal_id" 2>/dev/null || true)
+
+if [ "$interactive" -eq 1 ]; then
+    [ "$body_specified" -eq 1 ] || ask_body
+    if [ -z "$at_spec" ] && [ -z "$every_spec" ] && [ -z "$times" ] && [ -z "$until_spec" ]; then
+        ask_datetime
+    fi
+fi
 
 send_count=0
 trap 'printf "herdr-at: interrupted after %d send(s)\n" "$send_count" >&2; exit 130' INT
@@ -346,12 +566,35 @@ else
     next_target=$now
 fi
 
+# until が開始時刻より前になっている場合、HH:MM 形式(parse_time の繰り越し対象と
+# 同じ)なら開始時刻を超えるまで1日ずつ繰り越す。日付付きなど繰り越し対象外の
+# 形式ならエラーにする
+if [ -n "$until_ts" ] && [ "$until_ts" -lt "$next_target" ]; then
+    if [[ "$until_spec" =~ ^[0-9]{1,2}:[0-9]{2}(:[0-9]{2})?([[:space:]]*(am|pm|AM|PM))?$ ]]; then
+        while (( until_ts < next_target )); do
+            until_ts=$((until_ts + 86400))
+        done
+    else
+        die "終了時刻が開始時刻より前です: $(format_ts "$until_ts") < $(format_ts "$next_target")"
+    fi
+fi
+
 if [ -n "$every_secs" ] && [ "$skip_first" -eq 1 ]; then
     if [ -n "$at_spec" ]; then
         next_target=$((next_target + every_secs))
     else
         next_target=$((now + every_secs))
     fi
+fi
+
+# --skip-first などで最初の送信予定が既に until を超えている場合、
+# 何も送らずに正常終了せずエラーにする (dry-run でも同様)
+if [ -n "$until_ts" ] && [ "$next_target" -gt "$until_ts" ]; then
+    die "送信予定が0件です: 開始時刻 $(format_ts "$next_target") が終了時刻 $(format_ts "$until_ts") を過ぎています"
+fi
+
+if [ "$interactive" -eq 1 ]; then
+    wizard_confirm
 fi
 
 # dry-run は待機しないので、--times も --until も無い繰り返しは無限に出力される。
@@ -377,13 +620,13 @@ while :; do
 
     if [ "$dry_run" -eq 1 ]; then
         printf 'herdr-at: dry-run send #%d\n' "$((send_count + 1))" >&2
-        printf '  target:   %s (pane %s)\n' "$terminal_id" "$pane_id" >&2
+        printf '  target:   %s (pane %s)%s\n' "$terminal_id" "$pane_id" "${target_label:+ [$target_label]}" >&2
         printf '  at:       %s\n' "$(format_ts "$next_target")" >&2
         printf '  body:\n' >&2
         body_preview "$body" >&2
     else
         send_to_pane "$terminal_id" "$body" "$no_enter"
-        printf 'herdr-at: sent to %s (pane %s) at %s\n' "$terminal_id" "$pane_id" "$(format_ts "$next_target")" >&2
+        printf 'herdr-at: sent to %s (pane %s)%s at %s\n' "$terminal_id" "$pane_id" "${target_label:+ [$target_label]}" "$(format_ts "$next_target")" >&2
     fi
 
     send_count=$((send_count + 1))

@@ -5,6 +5,11 @@
 #   herdr-pick              対話的にペインを選びterminal_idを1行出力
 #   herdr-pick --pane       pane_idを出力
 #   herdr-pick -h, --help   このヘルプを表示
+#
+# 一覧には workspace / tab / agent / status / title のみを表示する
+# (workspace_id・pane_id・terminal_id は隠しフィールドとして保持し、
+#  出力とプレビューにのみ使う)。自分自身のペイン(HERDR_PANE_ID)は除外する。
+# agent が無いペイン(シェル)は agent 列・status 列を空欄にする。
 set -euo pipefail
 
 usage() {
@@ -16,12 +21,13 @@ die() {
     exit 1
 }
 
-output_field=8
+# 出力するフィールドのインデックス (選択行内, タブ区切り)。1=pane_id, 2=terminal_id
+output_field=2
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --pane)
-            output_field=3
+            output_field=1
             shift
             ;;
         -h|--help|help)
@@ -36,6 +42,7 @@ done
 
 command -v fzf >/dev/null 2>&1 || die "fzf not found"
 command -v jq >/dev/null 2>&1 || die "jq not found"
+command -v column >/dev/null 2>&1 || die "column not found"
 
 pane_json=$(herdr pane list 2>&1) || {
     message=$(jq -r '.error.message // empty' <<<"$pane_json" 2>/dev/null || true)
@@ -47,33 +54,59 @@ tab_json=$(herdr tab list 2>&1) || {
     die "${message:-failed to list tabs (is herdr running?)}"
 }
 
-lines=$(
-    jq -rn --argjson panes "$(jq -c '.result.panes' <<<"$pane_json")" \
-        --argjson tabs "$(jq -c '.result.tabs' <<<"$tab_json")" '
+workspace_json=$(herdr workspace list 2>&1) || {
+    message=$(jq -r '.error.message // empty' <<<"$workspace_json" 2>/dev/null || true)
+    die "${message:-failed to list workspaces (is herdr running?)}"
+}
+
+# 各行: pane_id, terminal_id, workspace_id, tab_id (隠しフィールド) \t
+#       workspace_label, tab_label, agent, status, title (表示フィールド)
+all_rows=$(
+    jq -rn \
+        --argjson panes "$(jq -c '.result.panes' <<<"$pane_json")" \
+        --argjson tabs "$(jq -c '.result.tabs' <<<"$tab_json")" \
+        --argjson workspaces "$(jq -c '.result.workspaces' <<<"$workspace_json")" \
+        --arg self "${HERDR_PANE_ID:-}" '
         ($tabs | map({key: .tab_id, value: .label}) | from_entries) as $tab_map |
+        ($workspaces | map({key: .workspace_id, value: .label}) | from_entries) as $ws_map |
         $panes[] |
+        select(.pane_id != $self) |
         [
-            ($tab_map[.tab_id] // .tab_id),
-            .workspace_id,
             .pane_id,
-            (.agent // "-"),
-            .agent_status,
-            ((.foreground_cwd // .cwd) | split("/") | last),
-            (if (.terminal_title_stripped // "") == "" then "-" else .terminal_title_stripped end),
-            .terminal_id
+            .terminal_id,
+            .workspace_id,
+            .tab_id,
+            ($ws_map[.workspace_id] // .workspace_id),
+            ($tab_map[.tab_id] // .tab_id),
+            (.agent // ""),
+            (if .agent then .agent_status else "" end),
+            (if (.terminal_title_stripped // "") != "" then .terminal_title_stripped
+             else ((.foreground_cwd // .cwd) | split("/") | last) end)
         ] | @tsv
     '
 )
 
-[ -n "$lines" ] || die "no panes found"
+[ -n "$all_rows" ] || die "no panes found"
+
+hidden_cols=$(cut -f1-4 <<<"$all_rows")
+visible_cols=$(cut -f5-9 <<<"$all_rows")
+
+header_raw=$'workspace\ttab\tagent\tstatus\ttitle'
+aligned=$(printf '%s\n%s\n' "$header_raw" "$visible_cols" | column -t -s $'\t')
+header_line=$(head -n1 <<<"$aligned")
+aligned_body=$(tail -n +2 <<<"$aligned")
+
+lines=$(paste -d $'\t' <(printf '%s\n' "$hidden_cols") <(printf '%s\n' "$aligned_body"))
 
 selection=$(
     printf '%s\n' "$lines" |
         fzf --delimiter=$'\t' \
-            --with-nth=1..-2 \
-            --header='tab  workspace  pane  agent  status  cwd  title' \
-            --preview='herdr pane read --source visible {3}' \
-            --preview-window=right:60%:wrap
+            --with-nth=5 \
+            --header="$header_line" \
+            --preview='herdr pane read --source visible {1}' \
+            --preview-window=down,60%,wrap \
+            --preview-label=' pane ' \
+            --bind='focus:transform-preview-label:echo " workspace={3}  tab={4}  pane={1} "'
 ) || {
     code=$?
     if [ "$code" -eq 1 ] || [ "$code" -eq 130 ]; then
@@ -84,12 +117,8 @@ selection=$(
 
 [ -n "$selection" ] || exit 130
 
-picked_pane=$(printf '%s\n' "$selection" | awk -F'\t' '{print $3}')
-picked_terminal=$(printf '%s\n' "$selection" | awk -F'\t' '{print $NF}')
+picked=$(awk -F'\t' -v f="$output_field" '{print $f}' <<<"$selection")
 
-[ -n "$picked_terminal" ] || die "failed to resolve selection"
+[ -n "$picked" ] || die "failed to resolve selection"
 
-case "$output_field" in
-    3) printf '%s\n' "$picked_pane" ;;
-    *) printf '%s\n' "$picked_terminal" ;;
-esac
+printf '%s\n' "$picked"
