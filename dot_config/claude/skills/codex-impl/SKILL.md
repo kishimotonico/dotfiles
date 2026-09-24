@@ -19,6 +19,19 @@ Codexはこの会話の文脈を知らない前提で、自己完結したプロ
 - 検証分担: Codex側で回すコマンド(例 `pnpm check` / `pnpm test`)と、委譲元側でやる検証(ブラウザ実機確認・画像生成)を明示
 - レンダリング依存・バイナリ成果物(スクリーンショット等)はCodexに生成させない。別ツールで撮ると本番とレンダリングが異なり比較で落ちるので、spec記述だけ任せる
 
+委譲先の報告・テスト・ACチェックは実態より強く出がちなので、末尾に次の定型ブロックを貼る(書き漏れた項目で実際に違反・水増しが起きている):
+
+```markdown
+## 制約(必ず守ること)
+
+- git commit / git add / git push はしないこと(コミットは委譲元側で行う)
+- 指定したディレクトリの外のファイルを変更しないこと
+- テストを通すために本番の実装・仕様を変えないこと。仕様変更が必要だと判断したら、変更せずに報告すること
+- 「◯◯は環境制約でできない」と報告する場合は、実行したコマンドとエラー全文を添えること
+- 受け入れ条件をチェックするときは根拠を書くこと。追加したテストは、検証対象を一時的に壊して
+  赤くなることを確認し(負の検証)、元に戻したうえで、どこを壊して何が落ちたかを報告すること
+```
+
 worktree隔離は、複数エージェントを並行で走らせるなら必須(作業ツリー衝突の防止)。単独なら不要。
 
 ### 2. 実行(background Bash)
@@ -26,14 +39,16 @@ worktree隔離は、複数エージェントを並行で走らせるなら必須
 実装は数分かかるので、必ず `run_in_background: true` で実行する。完了すると通知が来る。
 
 ```bash
+cd /abs/path/to/project || exit 1
 out=$(mktemp /tmp/codex-impl.XXXXXX.jsonl)
 err=$(mktemp /tmp/codex-impl.XXXXXX.err)
-echo "output: $out / stderr: $err"
+echo "cwd: $PWD / output: $out / stderr: $err"
 codex exec --json -s workspace-write -c approval_policy=never "<指示>" > "$out" 2>"$err" </dev/null
 ```
 
 重要:
 
+- 冒頭の絶対パス `cd` は省略しない。シェルのcwdは直前のコマンドに引きずられるため、`cd` なしだと無関係なディレクトリで実装が走る
 - **stderr は別ファイルに分ける(`2>&1` 禁止)**。codex が stderr に出す `Reading additional input from stdin...` 等の非JSON行が JSONL に混じると `jq` が parse error で全滅する
 - 実行中はClaudeは working tree を変更しない(並行編集事故の防止。読み取りはOK)
 - `--json` は thread_id とメッセージを確実に抽出するため
@@ -56,10 +71,10 @@ jq -rR 'fromjson? // empty | select(.type=="thread.started").thread_id' "$out"
 # Codexの最終報告 — item.completed にネストした agent_message。複数出ることがあるので最後を採る
 jq -rR 'fromjson? // empty | select(.item.type=="agent_message") | .item.text' "$out" | tail -1
 
-git status --short && git diff                                  # 実際の変更
+git status --short --untracked-files=all && git diff            # 実際の変更(新規ファイルはstatusで拾う)
 ```
 
-Codexの自己申告を鵜呑みにせず、差分を自分でレビューする。ビルド・テスト・lintがあれば回す。
+差分は最終報告より先に読む。報告を先に読むとそのフレーミングに引きずられてレビューが甘くなる。Codexの自己申告を鵜呑みにせず、ビルド・テスト・lintがあれば自分でも回す。
 
 ### 4. 反復(必要な場合)
 
@@ -70,6 +85,10 @@ codex exec resume <thread_id> --json -c 'sandbox_mode="workspace-write"' -c 'app
 ```
 
 `resume --last` は使用禁止。並行で別のCodexセッション(レビューや別タスク)が動いていると、無関係なセッションを掴んで文脈が壊れるため、必ずIDを明示する。
+
+差し戻しの指示には、直すものと合わせて**維持するもの**(触ってほしくない前ラウンドの成果)を明記する。ラウンドを重ねると指摘と無関係な部分まで巻き戻してくることがある。
+
+呼び出し元の Claude Code が終了・再起動すると background の codex は道連れで止まる。作業を手で再構成せず、同じ thread_id で resume して続きを頼む。その際「これは中断による中間状態であり、設計の誤りではない」と明記する。書かないと、壊れた中間状態を見て既存実装を作り直しにかかる。
 
 ### 5. 報告
 
