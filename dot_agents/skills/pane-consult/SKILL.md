@@ -1,6 +1,6 @@
 ---
 name: pane-consult
-description: herdr pane間の相談・返信プロトコル。「[consult from=…]」「[reply from=…]」を受け取ったとき、または別paneのエージェントへ相談・返信するときに使う。HERDR_ENV=1 のときのみ有効。
+description: herdr pane間の相談・返信プロトコル。「[consult from=…]」「[reply from=…]」を受け取ったとき、または別paneのエージェントへ相談・依頼・返信するとき(タブ名での宛先指定を含む)に使う。HERDR_ENV=1 のときのみ有効。
 ---
 
 # pane-consult
@@ -8,7 +8,7 @@ description: herdr pane間の相談・返信プロトコル。「[consult from=�
 herdr内のエージェントとの連絡には `herdr-msg` を使う。
 
 ```bash
-herdr-msg consult <agent|terminal_id> '<相談>'
+herdr-msg consult <タブ名|agent|terminal_id> '<相談>'
 herdr-msg reply <fromの値> '<返事>'
 herdr-msg list [agent]
 herdr-msg pick <agent>
@@ -28,6 +28,7 @@ herdr-msg reply <address> '<返事を1行で>'
 
 ## 送信
 
+- ユーザーがタブ名(例: `dot2`)で相手を指定したら、そのままtargetに渡す。同じワークスペースのタブのラベルと照合される
 - agent名を渡すと同一タブ > 同一cwdの順で自動選択される。決められずexit 2になったら、候補のterminal IDを指定して再実行する
 - 相手がworkingでも送信できる
 - 送信後はポーリングも `pane read` もせず、ターンを終える

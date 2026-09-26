@@ -7,11 +7,12 @@
 #
 # usage:
 #   herdr-msg list [agent]                 エージェント一覧 (jsonl)
-#   herdr-msg send <agent_target> <text>   1行テキストを送信してEnter
-#   herdr-msg consult <agent|pane_id|terminal_id> <本文>
-#                                          相談を送る。agent名(claude/codex等)なら
-#                                          同一タブ > 同一cwd の優先順で自動選択。
-#                                          [consult from=...] と返信ヒントを自動付与
+#   herdr-msg send <target> <text>         1行テキストを送信してEnter
+#   herdr-msg consult <target> <本文>      相談を送る。[consult from=...] と返信ヒントを自動付与
+#
+#   target は pane_id / terminal_id / タブ名 / agent名 の順に解決する。
+#   タブ名は同じワークスペース内のタブのラベル(UIの表示名)と照合する。
+#   agent名(claude/codex等)は同一タブ > 同一cwd の優先順で自動選択する
 #   herdr-msg pick <agent>                 自動選択結果のterminal_idだけ表示(送信しない)
 #   herdr-msg history [n]                  送信履歴の末尾n件を表示(デフォルト20)
 #   herdr-msg reply <reply_address> <本文>
@@ -238,6 +239,39 @@ pick_agent() {
     jq -er '.terminal_id' <<<"$pool"
 }
 
+# 同じワークスペース内でラベルが一致するタブのagentを1つ選ぶ。
+# タブが無ければ何も出力せず成功し、タブ内のagentが0件・複数なら失敗する
+tab_label_agent() {
+    local label="$1" tabs pool
+    [ -n "${HERDR_WORKSPACE_ID:-}" ] || return 0
+    tabs=$(herdr tab list --workspace "$HERDR_WORKSPACE_ID" |
+        jq -c --arg l "$label" '[.result.tabs[] | select(.label == $l) | .tab_id]')
+    [ "$tabs" != "[]" ] || return 0
+    pool=$(list_agents | jq -c --argjson tabs "$tabs" 'select(.tab_id as $t | $tabs | index($t))')
+    [ -n "$pool" ] || die "no agent found in tab '$label'"
+    if [ "$(wc -l <<<"$pool")" -gt 1 ]; then
+        {
+            echo "herdr-msg: multiple agents found in tab '$label'. pick one and rerun with its terminal_id"
+            jq -c . <<<"$pool"
+        } >&2
+        exit 2
+    fi
+    jq -er '.terminal_id' <<<"$pool"
+}
+
+# 宛先を terminal_id へ解決する。pane_id/terminal_id > タブ名 の順で照合し、
+# どちらでもなければ空文字を返す(呼び出し側で agent名等として扱う)
+resolve_target() {
+    local target="$1" terminal
+    terminal=$(list_agents | jq -rs --arg t "$target" '
+        map(select(.pane_id == $t or .terminal_id == $t))[0].terminal_id // empty
+    ')
+    if [ -z "$terminal" ]; then
+        terminal=$(tab_label_agent "$target") || exit $?
+    fi
+    printf '%s\n' "$terminal"
+}
+
 # 新形式 terminal_id@session_id と旧形式 pane_id@terminal_idを解釈する
 parse_reply_address() {
     local address="$1"
@@ -364,9 +398,11 @@ case "$cmd" in
         ;;
     send)
         require_env
-        [ $# -ge 3 ] || die "usage: herdr-msg send <agent_target> <text>"
+        [ $# -ge 3 ] || die "usage: herdr-msg send <target> <text>"
         target="$2"
         shift 2
+        resolved=$(resolve_target "$target")
+        target="${resolved:-$target}"
         from=$(log_address)
         deliver "$target" "$*" "send" "$from"
         ;;
@@ -381,13 +417,11 @@ case "$cmd" in
         ;;
     consult)
         require_env
-        [ $# -ge 3 ] || die "usage: herdr-msg consult <agent|pane_id|terminal_id> <本文>"
+        [ $# -ge 3 ] || die "usage: herdr-msg consult <target> <本文>"
         target="$2"
         shift 2
-        # pane/terminal ID指定ならterminal IDへ正規化し、agent名なら自動選択
-        terminal=$(list_agents | jq -rs --arg t "$target" '
-            map(select(.pane_id == $t or .terminal_id == $t))[0].terminal_id // empty
-        ')
+        # pane/terminal ID・タブ名ならterminal IDへ正規化し、agent名なら自動選択
+        terminal=$(resolve_target "$target")
         if [ -n "$terminal" ]; then
             target="$terminal"
         else
