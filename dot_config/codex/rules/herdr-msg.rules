@@ -1,0 +1,20 @@
+# herdr pane間通信用のherdr-msgだけをsandbox外で承認なしに実行させる。
+# default.rules はCodex TUIの「常に許可」が追記するファイルなので、ここでは管理しない
+prefix_rule(
+    pattern = [
+        "herdr-msg",
+        ["consult", "reply", "send", "list", "pick", "doctor"],
+    ],
+    decision = "allow",
+    justification = "Allow communication with sibling agents through the local Herdr socket.",
+    match = [
+        "herdr-msg consult codex test",
+        "herdr-msg reply term_xxx@session_xxx test",
+        "herdr-msg list",
+    ],
+    not_match = [
+        "herdr-msg history",
+        "herdr-msg term_xxx test",
+        "herdr pane run w1:p1 ls",
+    ],
+)
