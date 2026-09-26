@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# herdr-focused — herdrで現在フォーカスされているペインのpane_idを表示する
-set -euo pipefail
-
-herdr pane list | jq -r '.result.panes[] | select(.focused) | .pane_id'
