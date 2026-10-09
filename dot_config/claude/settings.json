@@ -8,9 +8,6 @@
   },
   "permissions": {
     "allow": [
-      "mcp__aivisspeech__speak",
-      "mcp__aivisspeech__notify_completion",
-      "mcp__aivisspeech__check_engine_status",
       "Bash(ls:*)",
       "Bash(grep:*)",
       "Bash(gh pr diff:*)",
@@ -38,10 +35,6 @@
       "mcp__chrome-devtools__new_page",
       "mcp__chrome-devtools__take_screenshot",
       "mcp__chrome-devtools__take_snapshot",
-      "mcp__context7__resolve-library-id",
-      "mcp__context7__query-docs",
-      "mcp__plugin_context7_context7__resolve-library-id",
-      "mcp__plugin_context7_context7__query-docs",
       "Skill(codex:rescue)",
       "Skill(codex:explain)"
     ],
@@ -73,7 +66,6 @@
   },
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": true,
-    "context7@claude-plugins-official": true,
     "codex@openai-codex": true
   },
   "extraKnownMarketplaces": {

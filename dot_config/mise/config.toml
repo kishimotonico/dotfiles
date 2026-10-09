@@ -26,6 +26,7 @@ go = "latest"
 "npm:@getpaseo/cli" = { version = "latest", trust_policy_excludes = ["@hono/node-server"] }
 "npm:agmsg" = "latest"
 "npm:backlog.md" = "latest"
+"npm:ctx7" = "latest"
 pnpm = "latest"
 gh = "latest"
 hadolint = "latest"
