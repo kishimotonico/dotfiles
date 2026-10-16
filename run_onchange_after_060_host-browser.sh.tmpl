@@ -1,0 +1,20 @@
+{{- if .isWsl -}}
+#!/bin/bash
+#
+# xdg-open の既定ブラウザを Windows 側の Chrome (host-browser.desktop) にする。
+# WSL内のLinux版Chromeが既定だと、xdg-open を使うCLIの認証画面がそちらで開いてしまうため。
+# desktop: {{ include "dot_local/share/applications/host-browser.desktop.tmpl" | sha256sum }}
+
+set -eu
+
+if ! command -v xdg-mime >/dev/null 2>&1; then
+    echo "host-browser: xdg-mime unavailable; skipping" >&2
+    exit 0
+fi
+
+# xdg-settings は $BROWSER が設定されていると失敗するため、xdg-mime で直接設定する
+for mime in x-scheme-handler/http x-scheme-handler/https text/html application/xhtml+xml; do
+    xdg-mime default host-browser.desktop "$mime"
+done
+echo "host-browser: default web browser set to host-browser.desktop"
+{{- end }}

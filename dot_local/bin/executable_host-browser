@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# WSLからホストOS(Windows)側のChromeでURL/ファイルを開く。
+# $BROWSER や xdg-open の既定ブラウザ(host-browser.desktop)から呼ばれる想定。
+#
+# 使い方:
+#   host-browser https://example.com
+#   host-browser ./index.html
+set -uo pipefail
+
+CHROME="/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
+
+if [ ! -x "$CHROME" ]; then
+	printf 'host-browser: %s が見つかりません\n' "$CHROME" >&2
+	exit 1
+fi
+
+args=()
+for a in "$@"; do
+	# ローカルファイルはWindowsパスに変換して渡す
+	if [[ "$a" == file://* ]]; then
+		a="${a#file://}"
+	fi
+	if [[ "$a" != *://* && -e "$a" ]]; then
+		a=$(wslpath -w "$a")
+	fi
+	args+=("$a")
+done
+
+# Chrome未起動時はchrome.exeが常駐し続けるので、切り離して即座に返す
+setsid "$CHROME" "${args[@]}" >/dev/null 2>&1 </dev/null &
