@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Windows Default Browser
+Comment=WSLからWindowsの既定ブラウザでURLを開く
+Exec=rundll32.exe url.dll,FileProtocolHandler %u
+NoDisplay=true
+Terminal=false
+MimeType=x-scheme-handler/http;x-scheme-handler/https;

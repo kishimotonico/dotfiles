@@ -5,6 +5,5 @@ AGENTS.md
 CLAUDE.md
 .config/git/config.local
 {{ if not .isWsl }}
-.local/bin/host-browser
 .local/share/applications/host-browser.desktop
 {{ end }}
