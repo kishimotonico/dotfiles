@@ -16,6 +16,7 @@ function set_aws_profile() {
     unset AWS_PROFILE
     unset AWS_ACCESS_KEY_ID
     unset AWS_SECRET_ACCESS_KEY
+    unset AWS_SESSION_TOKEN
     return
   fi
 
@@ -24,6 +25,7 @@ function set_aws_profile() {
   export AWS_PROFILE="$selected_profile"
   unset AWS_ACCESS_KEY_ID
   unset AWS_SECRET_ACCESS_KEY
+  unset AWS_SESSION_TOKEN
   
   check_sso_session=$(aws sts get-caller-identity 2>&1)
   if [[ "$check_sso_session" == *"Token has expired"* ]]; then
